@@ -1,9 +1,15 @@
 ### 🔥 How To Build (Windows MinGW)
 
-        mkdir build
-        cd build
-        cmake -G "MinGW Makefiles" ..
-        cmake --build . -j
+        rmdir /s /q build
+        cmake -S . -B build -G "MinGW Makefiles"
+        cmake --build build
+
+
+
+
+
+
+
 
 
 ### Unit Testing ( Testing Framework: CTest )

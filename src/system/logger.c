@@ -1,106 +1,169 @@
 
 // cleaner/src/system/logger.c
 
-#include <windows.h>
+#include "cleaner/system/logger.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 
-#include "cleaner/system/logger.h"
+/* ============================================================
+   Initialization
+   ============================================================ */
 
-#define LOGGER_MAX_PATH 32767
-
-static FILE *log_file = NULL;
-static HANDLE log_mutex = NULL;
-
-static int utf8_to_wide(const char *utf8,
-                        wchar_t *wide,
-                        size_t wide_size)
+int logger_init(
+    logger_t *log,
+    const cleaner_platform_api_t *platform,
+    const char *directory)
 {
-    return MultiByteToWideChar(
-               CP_UTF8,
-               0,
-               utf8,
-               -1,
-               wide,
-               (int)wide_size) > 0
-               ? 0
-               : -1;
-}
+    printf("DEBUG: after mutex\n");
+    printf("DEBUG: after mkdir\n");
+    printf("DEBUG: after file_open\n");
 
-static const char *level_to_string(LogLevel level)
-{
-    switch (level)
+    if (!log || !platform || !directory)
+        return -1;
+
+    memset(log, 0, sizeof(*log));
+
+    log->platform = platform;
+
+    // if (!platform->mutex_create ||
+    //     !platform->file_open ||
+    //     !platform->file_write ||
+    //     !platform->file_flush)
+    //     return -1;
+
+    if (!platform->mutex_create)
     {
-    case LOG_INFO:
-        return "INFO";
-    case LOG_WARN:
-        return "WARN";
-    case LOG_ERROR:
-        return "ERROR";
-    default:
-        return "UNKNOWN";
+        printf("FAIL: mutex_create missing\n");
+        return -1;
     }
+
+    if (!platform->file_open)
+    {
+        printf("FAIL: file_open missing\n");
+        return -1;
+    }
+
+    if (!platform->file_write)
+    {
+        printf("FAIL: file_write missing\n");
+        return -1;
+    }
+
+    if (!platform->file_flush)
+    {
+        printf("FAIL: file_flush missing\n");
+        return -1;
+    }
+
+    log->mutex = platform->mutex_create();
+    if (!log->mutex)
+        return -1;
+
+    if (platform->fs_mkdir(directory) != 0)
+        return -1;
+    // int mk = platform->fs_mkdir(directory);
+
+    // if (mk != 0)
+    // {
+    //     /* If already exists, ignore error */
+    //     if (!platform->fs_exists ||
+    //         !platform->fs_exists(directory))
+    //     {
+    //         return -1;
+    //     }
+    // }
+
+    char path[512];
+    snprintf(path, sizeof(path),
+             "%s/cleaner.log",
+             directory);
+
+    log->file = platform->file_open(path, "a");
+    if (!log->file)
+        return -1;
+
+    return 0;
 }
 
-void logger_init(const char *log_dir)
+/* ============================================================
+   Shutdown
+   ============================================================ */
+
+void logger_shutdown(logger_t *log)
 {
-    if (!log_dir)
+    if (!log || !log->platform)
         return;
 
-    wchar_t wide_dir[LOGGER_MAX_PATH];
-    utf8_to_wide(log_dir, wide_dir, LOGGER_MAX_PATH);
+    const cleaner_platform_api_t *p = log->platform;
 
-    CreateDirectoryW(wide_dir, NULL);
+    p->mutex_lock(log->mutex);
 
-    wchar_t wide_path[LOGGER_MAX_PATH];
-    swprintf(wide_path,
-             LOGGER_MAX_PATH,
-             L"%ls\\cleaner.log",
-             wide_dir);
+    if (log->file)
+    {
+        p->file_close(log->file);
+        log->file = NULL;
+    }
 
-    log_file = _wfopen(wide_path, L"a+, ccs=UTF-8");
+    p->mutex_unlock(log->mutex);
+    p->mutex_destroy(log->mutex);
 
-    log_mutex = CreateMutex(NULL, FALSE, NULL);
+    log->mutex = NULL;
 }
 
-void logger_log(LogLevel level,
-                const char *event,
-                const char *file_path)
+/* ============================================================
+   Logging
+   ============================================================ */
+
+void logger_log(
+    logger_t *log,
+    const char *level,
+    const char *fmt,
+    ...)
 {
-    if (!log_file)
+    if (!log || !log->file || !log->mutex)
         return;
 
-    WaitForSingleObject(log_mutex, INFINITE);
+    const cleaner_platform_api_t *p = log->platform;
 
-    SYSTEMTIME st;
-    GetLocalTime(&st);
+    p->mutex_lock(log->mutex);
 
-    fprintf(log_file,
-            "[%04d-%02d-%02d %02d:%02d:%02d] [%s] %s : %s\n",
-            st.wYear,
-            st.wMonth,
-            st.wDay,
-            st.wHour,
-            st.wMinute,
-            st.wSecond,
-            level_to_string(level),
-            event ? event : "",
-            file_path ? file_path : "");
+    cleaner_time_t now;
+    if (p->time_now(&now) != 0)
+    {
+        p->mutex_unlock(log->mutex);
+        return;
+    }
 
-    fflush(log_file);
+    char buffer[1024];
 
-    ReleaseMutex(log_mutex);
-}
+    int offset = snprintf(
+        buffer,
+        sizeof(buffer),
+        "%04d-%02d-%02d %02d:%02d:%02d [%s] ",
+        now.year, now.month, now.day,
+        now.hour, now.minute, now.second,
+        level ? level : "INFO");
 
-void logger_close()
-{
-    if (log_file)
-        fclose(log_file);
+    va_list args;
+    va_start(args, fmt);
 
-    if (log_mutex)
-        CloseHandle(log_mutex);
+    vsnprintf(buffer + offset,
+              sizeof(buffer) - offset,
+              fmt,
+              args);
 
-    log_file = NULL;
-    log_mutex = NULL;
+    va_end(args);
+
+    strncat(buffer, "\n",
+            sizeof(buffer) - strlen(buffer) - 1);
+
+    p->file_write(log->file,
+                  buffer,
+                  strlen(buffer));
+
+    p->file_flush(log->file);
+
+    p->mutex_unlock(log->mutex);
 }

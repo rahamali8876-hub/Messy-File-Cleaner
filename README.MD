@@ -7,42 +7,76 @@ cleaner/
 │
 ├── include/
 │   └── cleaner/
-│       │
+│
 │       ├── config.h
 │       │
-│       ├── core/                    # PURE domain logic (NO OS headers)
+│       ├── core/                      # 🧠 PURE DOMAIN LAYER
 │       │   ├── processor.h
 │       │   ├── scanner.h
 │       │   ├── organizer.h
-│       │   └── renamer.h
+│       │   ├── renamer.h
+│       │   ├── fs_interface.h         # Abstract filesystem contract
+│       │   ├── executor_interface.h   # Abstract execution contract
+│       │   ├── task_context.h
+│       │   └── error.h
 │       │
-│       ├── system/                  # Infrastructure orchestration
-│       │   ├── threadpool.h
+│       ├── system/                    # 🔧 INFRASTRUCTURE / ADAPTER LAYER
+│       │   ├── bounded_queue.h
+│       │   ├── retry.h
 │       │   ├── logger.h
-│       │   └── metrics.h
+│       │   ├── metrics.h
+│       │   ├── fs_adapter.h           # Implements core fs_interface
+│       │   ├── executor_adapter.h     # Implements executor_interface
+│       │   └── time_adapter.h
 │       │
-│       └── platform/                # OS abstraction layer (ONLY OS contact)
-│           ├── filesystem.h
-│           ├── threads.h
-│           ├── mutex.h
-│           ├── atomic.h
-│           └── time.h
+│       └── platform/                  # 🖥 PLATFORM ABSTRACTION (OS Layer)
+│           ├── filesystem/
+│           │   ├── filesystem_win.c
+│           │   └── filesystem_posix.c
+│           │
+│           ├── threads/
+│           │   ├── threads_win.c
+│           │   └── threads_posix.c
+│           │
+│           ├── sync/
+│           │   ├── mutex_win.c
+│           │   ├── mutex_posix.c
+│           │   ├── atomic_win.c
+│           │   └── atomic_posix.c
+│           │
+│           ├── threadpool/
+│           │   ├── threadpool_win.c
+│           │   └── threadpool_posix.c
+│           │
+│           ├── windows/
+│           │   └── file_win.c
+│           │
+│           ├── time/
+│           │   ├── time_win.c
+│           │   └── time_posix.c
+│           │
+│           └── platform_api.c         # Unified OS ABI table
 │
 ├── src/
-│   │
-│   ├── core/
+│
+│   ├── core/                          # 🧠 Domain Implementation
 │   │   ├── processor.c
 │   │   ├── scanner.c
 │   │   ├── organizer.c
-│   │   └── renamer.c
+│   │   ├── renamer.c
+│   │   ├── task_context.c
+│   │   └── error.c
 │   │
-│   ├── system/
-│   │   ├── threadpool.c
+│   ├── system/                        # 🔧 Infrastructure Implementation
+│   │   ├── bounded_queue.c
+│   │   ├── retry.c
 │   │   ├── logger.c
-│   │   └── metrics.c
+│   │   ├── metrics.c
+│   │   ├── fs_adapter.c
+│   │   ├── executor_adapter.c
+│   │   └── time_adapter.c
 │   │
-│   ├── platform/
-│   │   │
+│   ├── platform/                      # 🖥 OS-Specific Implementation
 │   │   ├── filesystem/
 │   │   │   ├── filesystem_win.c
 │   │   │   └── filesystem_posix.c
@@ -57,44 +91,61 @@ cleaner/
 │   │   │   ├── atomic_win.c
 │   │   │   └── atomic_posix.c
 │   │   │
-│   │   └── time/
-│   │       ├── time_win.c
-│   │       └── time_posix.c
+│   │   ├── threadpool/
+│   │   │   ├── threadpool_win.c
+│   │   │   └── threadpool_posix.c
+│   │   │
+│   │   ├── windows/
+│   │   │   └── file_win.c
+│   │   │
+│   │   ├── time/
+│   │   │   ├── time_win.c
+│   │   │   └── time_posix.c
+│   │   │
+│   │   └── platform_win.c             # Windows ABI binding
 │   │
 │   └── cli/
-│       └── main.c
+│       └── main.c                     # 🎯 Composition Root (Application Entry)
 │
 ├── tests/
 │   ├── CMakeLists.txt
-│   └── test_scanner.c
+│   │
+│   ├── core/
+│   │   └── test_scanner.c
+│   │
+│   └── system/
+│       └── test_executor.c
 │
 ├── docs/
-│   └── architecture.md
+│   ├── architecture.md
+│   │
+│   ├── rules/
+│   │   ├── 01_core_rules.md
+│   │   ├── 02_system_rules.md
+│   │   └── 03_platform_rules.md
+│   │
+│   └── governance/
+│       ├── code_review.md
+│       ├── contributing_guide.md
+│       └── architecture_diagrams.md
 │
 └── build/
     └── bin/
         └── cleaner.exe
 
+windows dialog open and shows cleaner.exe stop working. 
+A probles causesd to strop working curectly. 
+Windows will close the program and notify you if a solution is available 
 
-🧠 What You Just Achieved
+Rules:
 
-You now have:
+❌ core NEVER includes system
 
-Layer	Windows	Linux	Clean
-core	same	same	✅
-system	same	same	✅
-platform	swapped	swapped	✅
+❌ core NEVER includes platform
 
+❌ system NEVER includes win/posix files
 
-Next Senior-Level Moves
-
-Pick your direction:
-
-🔬 Add GitHub CI (build + test + cppcheck on push)
-
-📦 Add install + packaging (cmake --install)
-
-🧵 Improve threadpool correctness (race detection mindset)
+❌ platform NEVER includes core
 
 📊 Add benchmark target
 
@@ -103,6 +154,7 @@ Pick your direction:
 core/      → business rules
 platform/  → Windows-specific APIs
 infra/     → threadpool, logging, metrics
+
 
 
 cd ..

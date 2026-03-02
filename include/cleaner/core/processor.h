@@ -1,35 +1,31 @@
 
 // cleaner/include\processor.h
-#ifndef CLEANER_PROCESSOR_H
-#define CLEANER_PROCESSOR_H
 
-#ifdef __cplusplus
-extern "C"
+#ifndef CLEANER_CORE_PROCESSOR_H
+#define CLEANER_CORE_PROCESSOR_H
+
+#include "fs_interface.h"
+#include "renamer.h"
+#include <stdint.h>
+
+typedef struct
 {
+    fs_interface_t fs;
+    int (*get_time)(renamer_timestamp_t *out);
+    int dry_run;
+} processor_t;
+
+/* Initialize */
+int processor_init(
+    processor_t *p,
+    const fs_interface_t *fs,
+    int (*get_time_fn)(renamer_timestamp_t *),
+    int dry_run);
+
+/* Process ONE file */
+int processor_process_file(
+    processor_t *p,
+    const fs_entry_t *entry,
+    uint64_t id);
+
 #endif
-
-    /* =========================================
-       Time Mode
-       ========================================= */
-
-    typedef enum
-    {
-        TIME_MODE_MODIFIED = 0,
-        TIME_MODE_CREATION = 1
-    } TimeMode;
-
-    /* =========================================
-       Public API
-       ========================================= */
-
-    void processor_set_mode(TimeMode mode);
-    void processor_set_target(const char *target);
-    void processor_set_dry_run(int dry);
-
-    void processor_process_file(void *arg);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* CLEANER_PROCESSOR_H */

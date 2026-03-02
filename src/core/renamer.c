@@ -1,95 +1,46 @@
 
 // cleaner/src/core/renamer.c
 
-#include <windows.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "cleaner/core/renamer.h"
+#include <stdio.h>
+#include <string.h>
 
-#define MAX_EXTENSIONS 128
-
-typedef struct
+static const char *get_extension(const char *name)
 {
-    char extension[64];
-    LONG64 counter;
-} ExtensionCounter;
-
-static ExtensionCounter counters[MAX_EXTENSIONS];
-static int counter_count = 0;
-static CRITICAL_SECTION counter_lock;
-
-void renamer_init()
-{
-    InitializeCriticalSection(&counter_lock);
+    const char *dot = strrchr(name, '.');
+    if (!dot || dot == name)
+        return "";
+    return dot + 1;
 }
 
-static LONG64 get_next_number(const char *ext)
+int renamer_generate(
+    const char *original_name,
+    const renamer_timestamp_t *ts,
+    uint64_t counter,
+    char *output,
+    size_t output_size)
 {
-    EnterCriticalSection(&counter_lock);
+    if (!original_name || !ts || !output || output_size == 0)
+        return -1;
 
-    for (int i = 0; i < counter_count; i++)
-    {
-        if (_stricmp(counters[i].extension, ext) == 0)
-        {
-            LONG64 value = ++counters[i].counter;
-            LeaveCriticalSection(&counter_lock);
-            return value;
-        }
-    }
+    const char *ext = get_extension(original_name);
 
-    strcpy(counters[counter_count].extension, ext);
-    counters[counter_count].counter = 1;
-    counter_count++;
+    int written = snprintf(
+        output,
+        output_size,
+        "%04d-%02d-%02d_%02d-%02d-%02d_%llu%s%s",
+        ts->year,
+        ts->month,
+        ts->day,
+        ts->hour,
+        ts->minute,
+        ts->second,
+        (unsigned long long)counter,
+        (*ext) ? "." : "",
+        ext);
 
-    LeaveCriticalSection(&counter_lock);
+    if (written < 0 || (size_t)written >= output_size)
+        return -1;
 
-    return 1;
-}
-
-void build_timestamped_name(const char *original_name,
-                            const char *extension,
-                            char *output,
-                            size_t size)
-{
-    const char *dot = strrchr(original_name, '.');
-
-    char base[512];
-
-    if (dot)
-    {
-        // size_t len = dot - original_name;
-        size_t len = (size_t)(dot - original_name);
-        strncpy(base, original_name, len);
-        base[len] = '\0';
-    }
-    else
-    {
-        strcpy(base, original_name);
-    }
-
-    SYSTEMTIME st;
-    GetLocalTime(&st);
-
-    char datetime[64];
-    snprintf(datetime,
-             sizeof(datetime),
-             "%04d-%02d-%02d_%02d-%02d-%02d",
-             st.wYear,
-             st.wMonth,
-             st.wDay,
-             st.wHour,
-             st.wMinute,
-             st.wSecond);
-
-    LONG64 number = get_next_number(extension);
-
-    snprintf(output,
-             size,
-             "%s_%s_%lld.%s",
-             base,
-             datetime,
-             number,
-             extension);
+    return 0;
 }

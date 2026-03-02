@@ -4,22 +4,39 @@
 #define CLEANER_METRICS_H
 
 #include <stdint.h>
+#include <stdatomic.h>
+
+typedef struct
+{
+    atomic_uint_fast64_t files_processed;
+    atomic_uint_fast64_t files_moved;
+    atomic_uint_fast64_t errors;
+
+    uint64_t start_ns;
+    uint64_t end_ns;
+
+    uint64_t (*now_ns)(void *ctx);
+    void *time_ctx;
+
+} metrics_t;
 
 /* Lifecycle */
-void metrics_init(void);
-void metrics_finish(void);
+int metrics_init(metrics_t *m,
+                 uint64_t (*now_ns_fn)(void *),
+                 void *time_ctx);
+
+void metrics_finish(metrics_t *m);
 
 /* Counters */
-void metrics_increment_processed(void);
-void metrics_increment_moved(void);
-void metrics_increment_error(void);
+void metrics_inc_processed(metrics_t *m);
+void metrics_inc_moved(metrics_t *m);
+void metrics_inc_error(metrics_t *m);
 
 /* Getters */
-uint64_t metrics_get_files_processed(void);
-uint64_t metrics_get_files_moved(void);
-uint64_t metrics_get_errors(void);
+uint64_t metrics_get_processed(metrics_t *m);
+uint64_t metrics_get_moved(metrics_t *m);
+uint64_t metrics_get_errors(metrics_t *m);
 
-uint64_t metrics_get_elapsed_ns(void);
-double metrics_get_elapsed_seconds(void);
+double metrics_get_elapsed_seconds(metrics_t *m);
 
 #endif

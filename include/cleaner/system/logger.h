@@ -1,20 +1,28 @@
 
-// cleaner/include\logger.h
+// cleaner/system/logger.h
+#ifndef CLEANER_SYSTEM_LOGGER_H
+#define CLEANER_SYSTEM_LOGGER_H
 
-#ifndef LOGGER_H
-#define LOGGER_H
+#include "cleaner/platform/platform_api.h"
 
-typedef enum
+typedef struct
 {
-    LOG_INFO,
-    LOG_WARN,
-    LOG_ERROR
-} LogLevel;
+    const cleaner_platform_api_t *platform;
+    cleaner_mutex_t *mutex;
+    cleaner_file_t *file;
+} logger_t;
 
-void logger_init(const char *log_dir);
-void logger_log(LogLevel level,
-                const char *event,
-                const char *file_path);
-void logger_close();
+int logger_init(
+    logger_t *log,
+    const cleaner_platform_api_t *platform,
+    const char *directory);
+
+void logger_shutdown(logger_t *log);
+
+void logger_log(
+    logger_t *log,
+    const char *level,
+    const char *fmt,
+    ...);
 
 #endif

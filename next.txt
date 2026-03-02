@@ -58,3 +58,572 @@ But we’ll refactor that later.
     Defensive checks
 
     All layers exist for different failure modes.
+
+
+// cleaner/src/main.c
+
+#include <windows.h>
+#include <wchar.h>
+#include <stdio.h>
+
+#include "threadpool.h"
+#include "scanner.h"
+#include "metrics.h"
+#include "renamer.h"
+
+#define PATH_MAX_LEN 32767
+
+// ===============================
+// Forward Declarations
+// ===============================
+
+static void normalize_path(const wchar_t *in,
+                           wchar_t *out,
+                           size_t size);
+
+static void make_long_path(const wchar_t *input,
+                           wchar_t *output,
+                           size_t size);
+
+// ===============================
+// Entry Point
+// ===============================
+
+int wmain(int argc, wchar_t *argv[])
+{
+    if (argc < 2)
+    {
+        wprintf(L"Usage: cleaner.exe <directory> [--recursive]\n");
+        return 1;
+    }
+
+    wchar_t normalized[PATH_MAX_LEN];
+    wchar_t target[PATH_MAX_LEN];
+
+    normalize_path(argv[1], normalized, PATH_MAX_LEN);
+    make_long_path(normalized, target, PATH_MAX_LEN);
+
+    DWORD attr = GetFileAttributesW(target);
+    if (attr == INVALID_FILE_ATTRIBUTES ||
+        !(attr & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        wprintf(L"[ERROR] Invalid directory: %ls\n", target);
+        return 1;
+    }
+
+    int recursive = 0;
+    for (int i = 2; i < argc; i++)
+    {
+        if (_wcsicmp(argv[i], L"--recursive") == 0)
+            recursive = 1;
+    }
+
+    ThreadPool pool;
+
+    metrics_init();
+    renamer_init();
+    // threadpool_init(&pool, target, 4, 0);
+
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+
+    int threads = sysinfo.dwNumberOfProcessors * 2;
+
+    threadpool_init(&pool, target, threads, 0);
+
+    wprintf(L"[INFO] Scanning: %ls\n", target);
+
+    scan_directory(&pool, target, recursive);
+
+    threadpool_destroy(&pool);
+
+    metrics_print();
+
+    return 0;
+}
+
+// ===============================
+// Path Utilities
+// ===============================
+
+static void normalize_path(const wchar_t *in,
+                           wchar_t *out,
+                           size_t size)
+{
+    wcsncpy(out, in, size - 1);
+    out[size - 1] = L'\0';
+
+    for (wchar_t *p = out; *p; ++p)
+    {
+        if (*p == L'/')
+            *p = L'\\';
+    }
+
+    size_t len = wcslen(out);
+
+    // Remove trailing slash except root like C:
+    if (len > 3 && out[len - 1] == L'\\')
+        out[len - 1] = L'\0';
+}
+
+static void make_long_path(const wchar_t *input,
+                           wchar_t *output,
+                           size_t size)
+{
+    // Already long-path prefixed
+    if (wcsncmp(input, L"\\\\?\\", 4) == 0)
+    {
+        wcsncpy(output, input, size - 1);
+        output[size - 1] = L'\0';
+        return;
+    }
+
+    swprintf(output, size, L"\\\\?\\%ls", input);
+}
+, // cleaner/src/organizer.c
+
+#include <wchar.h>
+#include <wctype.h>
+
+#include "organizer.h"
+
+static void to_lowercase(const wchar_t *src,
+                         wchar_t *dest,
+                         size_t size)
+{
+    size_t i;
+    for (i = 0; src[i] && i < size - 1; i++)
+        dest[i] = towlower(src[i]);
+
+    dest[i] = L'\0';
+}
+
+const wchar_t *get_extension_folder(const wchar_t *filename)
+{
+    static wchar_t lower_ext[64];
+
+    const wchar_t *dot = wcsrchr(filename, L'.');
+
+    if (!dot || dot == filename)
+        return L"no_extension";
+
+    to_lowercase(dot + 1, lower_ext, 64);
+
+    return lower_ext;
+}, 
+processor.c 
+#include <windows.h>
+#include <wchar.h>
+#include <stdio.h>
+
+#include "processor.h"
+#include "organizer.h"
+#include "renamer.h"
+#include "metrics.h"
+
+#define MAX_PATH_LONG 32767
+
+static const wchar_t *extract_filename(const wchar_t *path)
+{
+    const wchar_t *slash = wcsrchr(path, L'\\');
+    return slash ? slash + 1 : path;
+}
+
+static void ensure_directory_exists(const wchar_t *path)
+{
+    DWORD attr = GetFileAttributesW(path);
+
+    if (attr == INVALID_FILE_ATTRIBUTES)
+        CreateDirectoryW(path, NULL);
+}
+
+void process_file(const wchar_t *full_path,
+                  ProcessorConfig *config)
+{
+    const wchar_t *filename = extract_filename(full_path);
+    const wchar_t *ext = get_extension_folder(filename);
+
+    wchar_t folder_name[128];
+    swprintf(folder_name, 128, L"%ls_images", ext);
+
+    wchar_t folder_path[MAX_PATH_LONG];
+    swprintf(folder_path,
+             MAX_PATH_LONG,
+             L"%ls\\%ls",
+             config->target_root,
+             folder_name);
+
+    ensure_directory_exists(folder_path);
+
+    wchar_t new_name[1024];
+
+    build_timestamped_name(filename,
+                           ext,
+                           new_name,
+                           1024);
+
+    wchar_t final_path[MAX_PATH_LONG];
+    swprintf(final_path,
+             MAX_PATH_LONG,
+             L"%ls\\%ls",
+             folder_path,
+             new_name);
+
+    if (!config->dry_run)
+    {
+        if (MoveFileExW(full_path,
+                        final_path,
+                        MOVEFILE_COPY_ALLOWED))
+        {
+            metrics_increment();
+        }
+    }
+    else
+    {
+        metrics_increment();
+    }
+}, // // cleaner/src/scanner.c
+
+// #include <windows.h>
+// #include <wchar.h>
+// #include <stdio.h>
+// #include "threadpool.h"
+
+// #define MAX_PATH_LONG 32767
+
+// void scan_directory(ThreadPool *pool, const wchar_t *path, int recursive)
+// {
+//     wchar_t search_path[MAX_PATH_LONG];
+//     WIN32_FIND_DATAW findData;
+
+//     swprintf(search_path, MAX_PATH_LONG, L"%s\\*", path);
+//     // wprintf(L"[DEBUG] Scanning directory: %s\n", path);
+//     wprintf(L"[DEBUG] Scanning directory: %ls\n", path);
+
+//     HANDLE hFind = FindFirstFileW(search_path, &findData);
+//     if (hFind == INVALID_HANDLE_VALUE)
+//     {
+//         DWORD err = GetLastError();
+//         // wprintf(L"[DEBUG] Failed to open directory: %s, error code: %lu\n", path, err);
+//         wprintf(L"[DEBUG] Failed to open directory: %ls, error code: %lu\n", path, err);
+//         return;
+//     }
+
+//     do
+//     {
+//         if (wcscmp(findData.cFileName, L".") == 0 ||
+//             wcscmp(findData.cFileName, L"..") == 0)
+//             continue;
+
+//         wchar_t full_path[MAX_PATH_LONG];
+//         swprintf(full_path, MAX_PATH_LONG, L"%s\\%s", path, findData.cFileName);
+
+//         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+//         {
+//             // wprintf(L"[DEBUG] Directory found: %s\n", full_path);
+//             wprintf(L"[DEBUG] Directory found: %ls\n", full_path);
+//             if (recursive)
+//                 scan_directory(pool, full_path, recursive);
+//         }
+//         else
+//         {
+//             // wprintf(L"[DEBUG] File found: %s\n", full_path);
+//             wprintf(L"[DEBUG] File found: %ls\n", full_path);
+//             threadpool_add_job(pool, full_path);
+//         }
+
+//     } while (FindNextFileW(hFind, &findData));
+
+//     DWORD err = GetLastError();
+//     if (err != ERROR_NO_MORE_FILES)
+//         wprintf(L"[DEBUG] FindNextFileW error: %lu\n", err);
+
+//     FindClose(hFind);
+// }
+
+#include <windows.h>
+#include <wchar.h>
+#include <stdio.h>
+
+#include "scanner.h"
+
+void scan_directory(ThreadPool *pool,
+                    const wchar_t *directory,
+                    int recursive)
+{
+    wchar_t search_path[MAX_PATH_LONG];
+
+    // CRITICAL FIX: ensure backslash before *
+    swprintf(search_path,
+             MAX_PATH_LONG,
+             L"%ls\\*",
+             directory);
+
+    WIN32_FIND_DATAW find_data;
+    HANDLE hFind = FindFirstFileW(search_path, &find_data);
+
+    if (hFind == INVALID_HANDLE_VALUE)
+    {
+        wprintf(L"[DEBUG] Failed to open directory: %ls (err=%lu)\n",
+                directory,
+                GetLastError());
+        return;
+    }
+
+    do
+    {
+        if (wcscmp(find_data.cFileName, L".") == 0 ||
+            wcscmp(find_data.cFileName, L"..") == 0)
+            continue;
+
+        wchar_t full_path[MAX_PATH_LONG];
+        swprintf(full_path,
+                 MAX_PATH_LONG,
+                 L"%ls\\%ls",
+                 directory,
+                 find_data.cFileName);
+
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        {
+            if (recursive)
+                scan_directory(pool, full_path, recursive);
+        }
+        else
+        {
+            threadpool_add_job(pool, full_path);
+        }
+
+    } while (FindNextFileW(hFind, &find_data));
+
+    FindClose(hFind);
+}, // // cleaner/src/threadpool.c
+
+// #include <windows.h>
+// #include <stdlib.h>
+// #include <wchar.h>
+// #include "threadpool.h"
+// #include "processor.h"
+
+// #define MAX_PATH_LONG 32767
+
+// static DWORD WINAPI worker_thread(LPVOID arg)
+// {
+//     ThreadPool *pool = (ThreadPool *)arg;
+
+//     while (1)
+//     {
+//         WaitForSingleObject(pool->semaphore, INFINITE);
+
+//         WaitForSingleObject(pool->mutex, INFINITE);
+
+//         Job *job = pool->head;
+
+//         if (job)
+//         {
+//             pool->head = job->next;
+//             if (!pool->head)
+//                 pool->tail = NULL;
+//         }
+
+//         int should_exit = (pool->stop && job == NULL);
+
+//         ReleaseMutex(pool->mutex);
+
+//         if (job)
+//         {
+//             process_file(job->path, &pool->processor_config);
+//             free(job);
+//         }
+//         else if (should_exit)
+//         {
+//             break;
+//         }
+//     }
+
+//     return 0;
+// }
+
+// void threadpool_init(ThreadPool *pool,
+//                      const wchar_t *target_root,
+//                      int thread_count,
+//                      int dry_run)
+// {
+//     pool->head = NULL;
+//     pool->tail = NULL;
+//     pool->stop = 0;
+
+//     pool->mutex = CreateMutex(NULL, FALSE, NULL);
+//     pool->semaphore = CreateSemaphore(NULL, 0, 32767, NULL);
+
+//     pool->thread_count = thread_count;
+//     pool->threads = (HANDLE *)malloc(sizeof(HANDLE) * thread_count);
+
+//     pool->processor_config.target_root = target_root;
+//     pool->processor_config.dry_run = dry_run;
+
+//     for (int i = 0; i < thread_count; i++)
+//     {
+//         pool->threads[i] = CreateThread(NULL, 0, worker_thread, pool, 0, NULL);
+//     }
+// }
+
+// void threadpool_add_job(ThreadPool *pool, const wchar_t *path)
+// {
+//     Job *job = (Job *)malloc(sizeof(Job));
+//     if (!job)
+//         return;
+
+//     wcsncpy(job->path, path, MAX_PATH_LONG - 1);
+//     job->path[MAX_PATH_LONG - 1] = L'\0';
+//     job->next = NULL;
+
+//     WaitForSingleObject(pool->mutex, INFINITE);
+
+//     if (pool->tail)
+//         pool->tail->next = job;
+//     else
+//         pool->head = job;
+
+//     pool->tail = job;
+
+//     ReleaseMutex(pool->mutex);
+
+//     ReleaseSemaphore(pool->semaphore, 1, NULL);
+// }
+
+// void threadpool_destroy(ThreadPool *pool)
+// {
+//     // Signal stop
+//     WaitForSingleObject(pool->mutex, INFINITE);
+//     pool->stop = 1;
+//     ReleaseMutex(pool->mutex);
+
+//     // Wake all workers
+//     for (int i = 0; i < pool->thread_count; i++)
+//         ReleaseSemaphore(pool->semaphore, 1, NULL);
+
+//     WaitForMultipleObjects(pool->thread_count,
+//                            pool->threads,
+//                            TRUE,
+//                            INFINITE);
+
+//     for (int i = 0; i < pool->thread_count; i++)
+//         CloseHandle(pool->threads[i]);
+
+//     free(pool->threads);
+
+//     CloseHandle(pool->mutex);
+//     CloseHandle(pool->semaphore);
+// }
+
+#include <windows.h>
+#include <stdlib.h>
+
+#include "threadpool.h"
+#include "processor.h"
+
+static DWORD WINAPI worker(LPVOID arg)
+{
+    ThreadPool *pool = (ThreadPool *)arg;
+
+    while (1)
+    {
+        WaitForSingleObject(pool->semaphore, INFINITE);
+
+        WaitForSingleObject(pool->mutex, INFINITE);
+
+        Job *job = pool->head;
+        if (job)
+        {
+            pool->head = job->next;
+            if (!pool->head)
+                pool->tail = NULL;
+        }
+
+        int should_exit = (pool->stop && job == NULL);
+
+        ReleaseMutex(pool->mutex);
+
+        if (job)
+        {
+            process_file(job->path, &pool->config);
+            free(job);
+        }
+        else if (should_exit)
+        {
+            break;
+        }
+    }
+
+    return 0;
+}
+
+void threadpool_init(ThreadPool *pool,
+                     const wchar_t *target_root,
+                     int thread_count,
+                     int dry_run)
+{
+    pool->head = NULL;
+    pool->tail = NULL;
+    pool->stop = 0;
+
+    pool->thread_count = thread_count;
+    pool->threads = malloc(sizeof(HANDLE) * thread_count);
+
+    pool->mutex = CreateMutex(NULL, FALSE, NULL);
+    pool->semaphore = CreateSemaphore(NULL, 0, 32767, NULL);
+
+    pool->config.target_root = target_root;
+    pool->config.dry_run = dry_run;
+
+    for (int i = 0; i < thread_count; i++)
+        pool->threads[i] =
+            CreateThread(NULL, 0, worker, pool, 0, NULL);
+}
+
+void threadpool_add_job(ThreadPool *pool,
+                        const wchar_t *path)
+{
+    Job *job = malloc(sizeof(Job));
+    wcsncpy(job->path, path, MAX_PATH_LONG - 1);
+    job->path[MAX_PATH_LONG - 1] = L'\0';
+    job->next = NULL;
+
+    WaitForSingleObject(pool->mutex, INFINITE);
+
+    if (pool->tail)
+        pool->tail->next = job;
+    else
+        pool->head = job;
+
+    pool->tail = job;
+
+    ReleaseMutex(pool->mutex);
+    ReleaseSemaphore(pool->semaphore, 1, NULL);
+}
+
+void threadpool_destroy(ThreadPool *pool)
+{
+    WaitForSingleObject(pool->mutex, INFINITE);
+    pool->stop = 1;
+    ReleaseMutex(pool->mutex);
+
+    for (int i = 0; i < pool->thread_count; i++)
+        ReleaseSemaphore(pool->semaphore, 1, NULL);
+
+    WaitForMultipleObjects(pool->thread_count,
+                           pool->threads,
+                           TRUE,
+                           INFINITE);
+
+    for (int i = 0; i < pool->thread_count; i++)
+        CloseHandle(pool->threads[i]);
+
+    free(pool->threads);
+
+    CloseHandle(pool->mutex);
+    CloseHandle(pool->semaphore);
+}
+
+
+updated something

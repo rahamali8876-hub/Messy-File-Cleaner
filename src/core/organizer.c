@@ -1,14 +1,14 @@
 
 // cleaner/src/core/organizer.c
 
+#include "cleaner/core/organizer.h"
 #include <string.h>
 #include <ctype.h>
 
-#include "cleaner/core/organizer.h"
-
-static void to_lowercase(const char *src,
-                         char *dest,
-                         size_t size)
+static void to_lowercase(
+    const char *src,
+    char *dest,
+    size_t size)
 {
     size_t i;
 
@@ -18,16 +18,20 @@ static void to_lowercase(const char *src,
     dest[i] = '\0';
 }
 
-const char *get_extension_folder(const char *filename)
+int get_extension_folder(
+    const char *filename,
+    char *out,
+    size_t out_size)
 {
-    static char lower_ext[64];
+    if (!filename || !out || out_size == 0)
+        return -1;
 
     const char *dot = strrchr(filename, '.');
 
     if (!dot || dot == filename)
-        return "no_extension";
+        return -1;
 
-    to_lowercase(dot + 1, lower_ext, sizeof(lower_ext));
+    to_lowercase(dot + 1, out, out_size);
 
-    return lower_ext;
+    return 0;
 }
