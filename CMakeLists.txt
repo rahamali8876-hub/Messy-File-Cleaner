@@ -195,6 +195,30 @@ add_custom_target(all_quality
 )
 
 # ========================
+# 11️⃣ Benchmarks
+# ========================
+file(GLOB BENCHMARK_SOURCES CONFIGURE_DEPENDS
+    benchmarks/bench_*.c
+)
+
+foreach(BM_SRC ${BENCHMARK_SOURCES})
+    get_filename_component(BM_NAME ${BM_SRC} NAME_WE)
+    add_executable(${BM_NAME} ${BM_SRC})
+    target_link_libraries(${BM_NAME} PRIVATE cleaner_core)
+    enable_project_warnings(${BM_NAME})
+endforeach()
+
+# Python orchestration
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+add_custom_target(run_benchmarks
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/benchmarks/run_all_benchmarks.py
+    DEPENDS ${BENCHMARK_SOURCES}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Running all benchmarks via Python orchestration..."
+)
+
+# ========================
 # 🔟 Install
 # ========================
 install(TARGETS cleaner cleaner_core
