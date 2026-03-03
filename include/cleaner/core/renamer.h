@@ -6,22 +6,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct
-{
-    int year;
-    int month;
-    int day;
-    int hour;
-    int minute;
-    int second;
+typedef struct {
+  int year;
+  int month;
+  int day;
+  int hour;
+  int minute;
+  int second;
 } renamer_timestamp_t;
 
-int renamer_generate(
-    const char *original_name,
-    const renamer_timestamp_t *ts,
-    uint64_t counter,
-    char *output,
-    size_t output_size);
+int renamer_generate(const char *original_name, const renamer_timestamp_t *ts,
+                     uint64_t counter, char *output, size_t output_size);
 
 #endif
 

@@ -4,34 +4,27 @@
 #define CLEANER_CORE_FS_INTERFACE_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-    // Struct is stable. Never extend. Use versioning if needed._entry_t;
+// Struct is stable. Never extend. Use versioning if needed._entry_t;
 
-    typedef struct
-    {
-        const char *path;
-        int is_directory;
-    } fs_entry_t;
+typedef struct {
+  const char *path;
+  int is_directory;
+} fs_entry_t;
 
-    typedef struct fs_interface
-    {
+typedef struct fs_interface {
 
-        int (*list_directory)(
-            const char *path,
-            int (*callback)(const fs_entry_t *entry, void *ctx),
-            void *ctx);
+  int (*list_directory)(const char *path,
+                        int (*callback)(const fs_entry_t *entry, void *ctx),
+                        void *ctx);
 
-        int (*move_file)(
-            const char *src,
-            const char *dst);
+  int (*move_file)(const char *src, const char *dst);
 
-        int (*create_directory)(
-            const char *path);
+  int (*create_directory)(const char *path);
 
-    } fs_interface_t;
+} fs_interface_t;
 
 #ifdef __cplusplus
 }

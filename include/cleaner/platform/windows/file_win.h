@@ -8,19 +8,12 @@
 
 /* Windows file backend API (internal to platform layer) */
 
-cleaner_file_t *win_file_open(
-    const char *path,
-    const char *mode);
+cleaner_file_t *win_file_open(const char *path, const char *mode);
 
-int win_file_write(
-    cleaner_file_t *file,
-    const void *data,
-    size_t size);
+int win_file_write(cleaner_file_t *file, const void *data, size_t size);
 
-int win_file_flush(
-    cleaner_file_t *file);
+int win_file_flush(cleaner_file_t *file);
 
-void win_file_close(
-    cleaner_file_t *file);
+void win_file_close(cleaner_file_t *file);
 
 #endif

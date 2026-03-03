@@ -100,3 +100,22 @@
     * Unit tests exist
 
     If any answer is NO → reject the change.
+
+
+
+### ✅ Summary Table
+    Layer	Can Talk To	Reason
+    Core	None	Must stay pure, deterministic, OS-agnostic
+    System	Core, Platform	Orchestration layer: defines what to do, uses Core (logic) and Platform (mechanism)
+    Platform	OS only	Thin wrappers over OS; no knowledge of business logic
+
+    Visual (Enterprise Chain):
+
+    CLI / App
+    ↓
+    System  → Core (business rules)
+            → Platform (OS wrappers)
+    ↓
+    Platform → OS
+
+    Notice all arrows go down, no reverse dependency.

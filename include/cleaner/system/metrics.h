@@ -3,27 +3,24 @@
 #ifndef CLEANER_METRICS_H
 #define CLEANER_METRICS_H
 
-#include <stdint.h>
 #include <stdatomic.h>
+#include <stdint.h>
 
-typedef struct
-{
-    atomic_uint_fast64_t files_processed;
-    atomic_uint_fast64_t files_moved;
-    atomic_uint_fast64_t errors;
+typedef struct {
+  atomic_uint_fast64_t files_processed;
+  atomic_uint_fast64_t files_moved;
+  atomic_uint_fast64_t errors;
 
-    uint64_t start_ns;
-    uint64_t end_ns;
+  uint64_t start_ns;
+  uint64_t end_ns;
 
-    uint64_t (*now_ns)(void *ctx);
-    void *time_ctx;
+  uint64_t (*now_ns)(void *ctx);
+  void *time_ctx;
 
 } metrics_t;
 
 /* Lifecycle */
-int metrics_init(metrics_t *m,
-                 uint64_t (*now_ns_fn)(void *),
-                 void *time_ctx);
+int metrics_init(metrics_t *m, uint64_t (*now_ns_fn)(void *), void *time_ctx);
 
 void metrics_finish(metrics_t *m);
 

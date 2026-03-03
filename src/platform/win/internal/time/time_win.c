@@ -3,23 +3,22 @@
 
 /* INTERNAL - DO NOT INCLUDE OUTSIDE PLATFORM */
 
-#include <windows.h>
-#include <stdint.h>
 #include "cleaner/platform/time/time_win.h"
+#include <stdint.h>
+#include <windows.h>
 
-int platform_time_now(platform_time_t *out)
-{
-    SYSTEMTIME st;
-    GetLocalTime(&st);
+int platform_time_now(platform_time_t *out) {
+  SYSTEMTIME st;
+  GetLocalTime(&st);
 
-    out->year = st.wYear;
-    out->month = st.wMonth;
-    out->day = st.wDay;
-    out->hour = st.wHour;
-    out->minute = st.wMinute;
-    out->second = st.wSecond;
+  out->year = st.wYear;
+  out->month = st.wMonth;
+  out->day = st.wDay;
+  out->hour = st.wHour;
+  out->minute = st.wMinute;
+  out->second = st.wSecond;
 
-    return 0;
+  return 0;
 }
 
 // uint64_t cleaner_time_now_ns(void)

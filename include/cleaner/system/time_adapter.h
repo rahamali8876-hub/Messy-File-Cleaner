@@ -6,17 +6,13 @@
 #include "cleaner/core/renamer.h"
 #include "cleaner/platform/platform_api.h"
 
-typedef struct
-{
-    const cleaner_platform_api_t *platform;
+typedef struct {
+  const cleaner_platform_api_t *platform;
 } time_adapter_t;
 
-int time_adapter_init(
-    time_adapter_t *ta,
-    const cleaner_platform_api_t *platform);
+int time_adapter_init(time_adapter_t *ta,
+                      const cleaner_platform_api_t *platform);
 
-int time_adapter_now(
-    time_adapter_t *ta,
-    renamer_timestamp_t *out);
+int time_adapter_now(time_adapter_t *ta, renamer_timestamp_t *out);
 
 #endif

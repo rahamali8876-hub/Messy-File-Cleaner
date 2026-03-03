@@ -6,9 +6,8 @@
 
 #include <stdint.h>
 
-typedef struct
-{
-    volatile int64_t value;
+typedef struct {
+  volatile int64_t value;
 } cleaner_atomic_i64;
 
 void cleaner_atomic_init(cleaner_atomic_i64 *a, int64_t v);

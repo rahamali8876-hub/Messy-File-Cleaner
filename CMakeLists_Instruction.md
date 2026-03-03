@@ -1,31 +1,40 @@
+### inatallation packeges ( on MINGW TERMINAL )
+        pacman -S mingw-w64-x86_64-libjpeg-turbo
+        pacman -S mingw-w64-x86_64-make
+        pacman -S mingw-w64-x86_64-cppcheck
+        pacman -S libjpeg-turbo
+        pacman -S make
+
+### REMOVE PACKEGES
+        pacman -R mingw-w64-x86_64-make
+
+### filter installed packeges
+        pacman -Q
+        pacman -Q | grep make
+        pacman -Q | grep jpeg
+        mingw-w64-x86_64-make 4.4.1-4
+        mingw-w64-x86_64-libjpeg-turbo 3.1.3-1
+
+### Find DLL Inside FILES
+        nm -g build/img2pdf.dll | grep img2pdf_
+
 ### 🔥 How To Build (Windows MinGW)
 
         rmdir /s /q build
         cmake -S . -B build -G "MinGW Makefiles"
         cmake --build build
 
-
-
-
-
-
-
-
-
-### Unit Testing ( Testing Framework: CTest )
-        cmake --build . -j
-        ctest --output-on-failure
-        ctest
-
-                🧠 Important Engineering Lesson
-
-                CTest runs tests from the build directory, not source directory.
-
-                Never assume relative paths exist.
-
-                Always create test fixtures inside the test itself.
-
-                Professional C projects follow this pattern.
+### Testing VIOLETION ( FORMATING / STATIC ANALYSIS / LAYER CHECKS / ETC. )
+        cmake --build build --target layer_checks
+        cmake --build build --target format
+        cmake --build build --target format_check
+        cmake --build build --target static_analysis ( After building only )
+        cmake --build build --target cppcheck
+        cmake --build build --target docs
+        cmake --build build --target coverage
+        cmake --build build --target graph
+        cmake --build build --target all_quality
+        cmake --build build --target distclean
         
 
 ### Remove build artifacts:
@@ -38,82 +47,3 @@
 ### 🔥 Release Build
         cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
         cmake --build .
-
-### 🔥 Enable LTO
-        cmake -G "MinGW Makefiles" -DENABLE_LTO=ON ..
-        cmake --build .
-
-### 🔥 Enable AddressSanitizer
-        cmake -G "MinGW Makefiles" -DENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug ..
-        cmake --build .
-
-### 🔥 PGO (Correct Workflow)
-        Step 1 — Generate profile
-        cmake -G "MinGW Makefiles" -DENABLE_PGO_GENERATE=ON ..
-        cmake --build .
-
-
-Run program normally:
-
-build\cleaner.exe "D:\Testing" --recursive
-
-Step 2 — Use profile
-
-Delete build folder completely.
-
-Then:
-
-cmake -G "MinGW Makefiles" -DENABLE_PGO_USE=ON ..
-cmake --build .
-
-
-Done.
-
-🔥 Linux Build
-
-On Linux:
-
-mkdir build
-cd build
-cmake ..
-make -j
-
-
-No changes needed.
-
-What You Just Gained
-
-✔ Cross-platform without shell hacks
-✔ Automatic dependency handling
-✔ Clean Debug/Release separation
-✔ IDE compatibility
-✔ MSVC support instantly
-✔ Production-ready configuration
-
-<!-- 
-cmake_minimum_required(VERSION 3.16)
-project(cleaner VERSION 1.1.0 LANGUAGES C)
-
-set(CMAKE_C_STANDARD 17)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-
-file(GLOB_RECURSE SOURCES
-    src/*.c
-)
-
-include_directories(include)
-
-add_executable(cleaner ${SOURCES})
-
-if (WIN32)
-    target_link_libraries(cleaner PRIVATE
-        kernel32
-        user32
-    )
-endif()
-
-target_compile_options(cleaner PRIVATE
-    -Wall
-    -Wextra
-    -O2
-) -->

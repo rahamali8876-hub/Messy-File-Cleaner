@@ -12,9 +12,6 @@
  *   0 on success
  *  -1 if no extension
  */
-int get_extension_folder(
-    const char *filename,
-    char *out,
-    size_t out_size);
+int get_extension_folder(const char *filename, char *out, size_t out_size);
 
 #endif
