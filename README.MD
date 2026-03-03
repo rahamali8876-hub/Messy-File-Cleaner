@@ -143,7 +143,7 @@ cmake --build build
   CI/CD-ready, reproducible builds
 
   Ideal reference for professional C engineering from A → Z
-
+```
 
 ### Optional Visual Diagram
   Shows dependencies: Core & Platform feed System, System feeds Executable.
