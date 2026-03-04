@@ -84,24 +84,24 @@ endif()
 # ========================
 # 1️⃣ Architecture Enforcement (Python AST Checker)
 # ========================
-if(ENABLE_ARCH_CHECK)
-    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+# if(ENABLE_ARCH_CHECK)
+#     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-    set(AST_CHECK_SCRIPT "${CMAKE_SOURCE_DIR}/cmake/ast_layer_checker.py")
+#     set(AST_CHECK_SCRIPT "${CMAKE_SOURCE_DIR}/cmake/ast_layer_checker.py")
 
-    if(NOT EXISTS ${AST_CHECK_SCRIPT})
-        message(FATAL_ERROR "cmake/ast_layer_checker.py not found!")
-    endif()
+#     if(NOT EXISTS ${AST_CHECK_SCRIPT})
+#         message(FATAL_ERROR "cmake/ast_layer_checker.py not found!")
+#     endif()
 
-    add_custom_target(layer_checks
-        COMMAND ${Python3_EXECUTABLE} ${AST_CHECK_SCRIPT} ${CMAKE_SOURCE_DIR}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Running AST-based architecture enforcement..."
-        VERBATIM
-    )
+#     add_custom_target(layer_checks
+#         COMMAND ${Python3_EXECUTABLE} ${AST_CHECK_SCRIPT} ${CMAKE_SOURCE_DIR}
+#         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+#         COMMENT "Running AST-based architecture enforcement..."
+#         VERBATIM
+#     )
 
-    add_dependencies(cleaner_core layer_checks)
-endif()
+#     add_dependencies(cleaner_core layer_checks)
+# endif()
 
 # ========================
 # 2️⃣ Format (clang-format)

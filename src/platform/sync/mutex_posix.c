@@ -3,7 +3,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#include "cleaner/platform/mutex_win.h"
+#include "cleaner/platform/sync/mutex_win.h"
 
 struct cleaner_mutex {
   pthread_mutex_t mutex;

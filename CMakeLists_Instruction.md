@@ -18,8 +18,7 @@
 ### Find DLL Inside FILES
         nm -g build/img2pdf.dll | grep img2pdf_
 
-### 🔥 How To Build (Windows MinGW)
-
+### 🔥 How To Build ( Windows MinGW )
         rmdir /s /q build
         cmake -S . -B build -G "MinGW Makefiles"
         cmake --build build
@@ -42,7 +41,6 @@
 
 ### 🔥 Debug Build
         cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug ..
-        cmake --build .
 
 ### 🔥 Release Build
         cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..

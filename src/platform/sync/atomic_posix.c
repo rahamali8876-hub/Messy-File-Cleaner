@@ -1,7 +1,7 @@
 
 // 📄 src/platform/atomic_posix.c
 
-#include "cleaner/platform/atomic.h"
+#include "cleaner/platform/sync/atomic_win.h"
 
 void cleaner_atomic_init(cleaner_atomic_i64 *a, int64_t v) { a->value = v; }
 

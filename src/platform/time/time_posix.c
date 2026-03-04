@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <time.h>
 
-#include "cleaner/platform/time.h"
+#include "cleaner/platform/time/time_win.h"
 
 uint64_t cleaner_time_now_ns(void) {
   struct timespec ts;

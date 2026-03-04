@@ -1,18 +1,23 @@
 
 cleat's create entriprise level project with c programming , listen carefully what i want
-### 🏗 PRINCIPAL-GRADE STRUCTURE (Upgraded)
+🏗 Mesy Files Cleaner Project – Principal-Grade Structure ( C Programming )
 cleaner/
 │
 ├── CMakeLists.txt
 ├── cmake/
-│   └── CompilerWarnings.cmake
+│   ├── AstArchCheck.cmake
+│   ├── CodeCoverage.cmake
+│   ├── CompilerWarnings.cmake
+│   ├── CTestIntegration.cmake
+│   ├── ast_layer_check.cmake
+│   ├── code_coverage.cmake
+│   └── ast_layer_checker.py
 │
 ├── include/
 │   └── cleaner/
-│
 │       ├── config.h
 │       │
-│       ├── core/                      # 🧠 PURE DOMAIN LAYER
+│       ├── core/                      🧠 **Domain Layer**
 │       │   ├── processor.h
 │       │   ├── scanner.h
 │       │   ├── organizer.h
@@ -22,19 +27,19 @@ cleaner/
 │       │   ├── task_context.h
 │       │   └── error.h
 │       │
-│       ├── system/                    # 🔧 INFRASTRUCTURE / ADAPTER LAYER
+│       ├── system/                    🔧 **Infrastructure / Adapter Layer**
 │       │   ├── bounded_queue.h
 │       │   ├── retry.h
 │       │   ├── logger.h
 │       │   ├── metrics.h
 │       │   ├── fs_adapter.h           # Implements core fs_interface
 │       │   ├── executor_adapter.h     # Implements executor_interface
-│       │   └── time_adapter.h
-│       │   ├── wal.h                  # crash-safe logging
-│       │   └── memory_pool.h          # optional arena
-                recovery.h             # optional WAL-based recovery
+│       │   ├── time_adapter.h
+│       │   ├── wal.h                  # Crash-safe logging
+│       │   ├── memory_pool.h          # Optional arena
+│       │   └── recovery.h             # Optional WAL-based recovery
 │       │
-│       └── platform/                  # 🖥 PLATFORM ABSTRACTION (OS Layer)
+│       └── platform/                  🖥 **Platform Abstraction / OS Layer**
 │           ├── filesystem/
 │           │   ├── filesystem_win.c
 │           │   └── filesystem_posix.c
@@ -60,11 +65,10 @@ cleaner/
 │           │   ├── time_win.c
 │           │   └── time_posix.c
 │           │
-│           └── platform_api.c         # Unified OS ABI table
+│           └── platform_api.c        # Unified OS ABI table
 │
 ├── src/
-│
-│   ├── core/                          # 🧠 Domain Implementation
+│   ├── core/                          🧠 **Domain Implementation**
 │   │   ├── processor.c
 │   │   ├── scanner.c
 │   │   ├── organizer.c
@@ -72,19 +76,19 @@ cleaner/
 │   │   ├── task_context.c
 │   │   └── error.c
 │   │
-│   ├── system/                        # 🔧 Infrastructure Implementation
+│   ├── system/                        🔧 **Infrastructure Implementation**
 │   │   ├── bounded_queue.c
 │   │   ├── retry.c
 │   │   ├── logger.c
 │   │   ├── metrics.c
 │   │   ├── fs_adapter.c
 │   │   ├── executor_adapter.c
-│   │   └── time_adapter.c
-│   │   ├── wal.c                        # crash-safe logging
-│   │   └── memory_pool.c          # optional arena
-            recovery.c             # optional WAL-based recovery
+│   │   ├── time_adapter.c
+│   │   ├── wal.c                      # Crash-safe logging
+│   │   ├── memory_pool.c              # Optional arena
+│   │   └── recovery.c                  # Optional WAL-based recovery
 │   │
-│   ├── platform/                      # 🖥 OS-Specific Implementation
+│   ├── platform/                      🖥 **OS-Specific Implementation**
 │   │   ├── filesystem/
 │   │   │   ├── filesystem_win.c
 │   │   │   └── filesystem_posix.c
@@ -113,12 +117,13 @@ cleaner/
 │   │   └── platform_win.c             # Windows ABI binding
 │   │
 │   └── app/
-│       └── main.c                     # 🎯 Composition Root (Application Entry)
-├── internal/                         # 🔒 PRIVATE HEADERS (not installed)
+│       └── main.c                     🎯 **Composition Root / App Entry**
+│
+├── internal/                          🔒 **Private Headers**
 │   ├── core_internal.h
 │   ├── system_internal.h
 │   └── platform_internal.h
-
+│
 ├── tests/
 │   ├── unit/
 │   │   ├── core/
@@ -143,11 +148,21 @@ cleaner/
 │       ├── contributing_guide.md
 │       └── architecture_diagrams.md
 │
-└── build/
-    └── bin/
-        └── cleaner.exe
-
-
+├── build/
+│   ├── bin/
+│   │   └── cleaner.exe
+│   │
+│   ├── cmake/
+│   │   ├── AstArchCheck.cmake
+│   │   ├── CodeCoverage.cmake
+│   │   ├── CompilerWarnings.cmake
+│   │   └── CTestIntegration.cmake
+│   │
+│   └── benchmarks/
+│       ├── benchmark_core.c
+│       ├── benchmark_system.c
+│       ├── benchmark_platform.c
+│       └── run_all_benchmarks.py
 
 
 windows dialog open and shows cleaner.exe stop working. 
