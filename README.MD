@@ -148,3 +148,6 @@ cmake --build build
 ### Optional Visual Diagram
   Shows dependencies: Core & Platform feed System, System feeds Executable.
   ![alt text](mermaid-diagram.png)
+
+
+  

@@ -9,22 +9,32 @@
 /* Internal Structures                                   */
 /* ===================================================== */
 
-typedef struct task_node {
+typedef struct task_node
+{
   task_fn fn;
   void *arg;
   struct task_node *next;
 } task_node_t;
 
-struct threadpool {
+struct threadpool
+{
+
+  //  size_t thread_count;
+  // size_t queue_capacity;
+  // size_t queue_size;
+  // size_t active_count;
+
   HANDLE *threads;
-  int thread_count;
-  int queue_capacity;
+  // int thread_count;
+  size_t thread_count;
+  // int queue_capacity;
+  size_t queue_capacity;
 
   task_node_t *head;
   task_node_t *tail;
-  int queue_size;
+  size_t queue_size;
 
-  int active_count; /* running tasks */
+  size_t active_count; /* running tasks */
 
   CRITICAL_SECTION lock;
   CONDITION_VARIABLE cond;      /* work available */
@@ -37,23 +47,27 @@ struct threadpool {
 /* Worker Thread                                         */
 /* ===================================================== */
 
-static DWORD WINAPI thread_worker(LPVOID lpParam) {
+static DWORD WINAPI thread_worker(LPVOID lpParam)
+{
   threadpool_t *tp = (threadpool_t *)lpParam;
 
-  while (1) {
+  while (1)
+  {
     EnterCriticalSection(&tp->lock);
 
     while (!tp->head && !tp->stop)
       SleepConditionVariableCS(&tp->cond, &tp->lock, INFINITE);
 
-    if (tp->stop && !tp->head) {
+    if (tp->stop && !tp->head)
+    {
       LeaveCriticalSection(&tp->lock);
       break;
     }
 
     task_node_t *task = tp->head;
 
-    if (task) {
+    if (task)
+    {
       tp->head = task->next;
       if (!tp->head)
         tp->tail = NULL;
@@ -64,7 +78,8 @@ static DWORD WINAPI thread_worker(LPVOID lpParam) {
 
     LeaveCriticalSection(&tp->lock);
 
-    if (task) {
+    if (task)
+    {
       task->fn(task->arg);
       free(task);
 
@@ -81,69 +96,33 @@ static DWORD WINAPI thread_worker(LPVOID lpParam) {
   return 0;
 }
 
-// static DWORD WINAPI thread_worker(LPVOID lpParam)
-// {
-//     threadpool_t *tp = (threadpool_t *)lpParam;
-
-//     while (1)
-//     {
-//         EnterCriticalSection(&tp->lock);
-
-//         while (!tp->head && !tp->stop)
-//             SleepConditionVariableCS(&tp->cond, &tp->lock, INFINITE);
-
-//         if (tp->stop)
-//         {
-//             LeaveCriticalSection(&tp->lock);
-//             break;
-//         }
-
-//         task_node_t *task = tp->head;
-
-//         if (task)
-//         {
-//             tp->head = task->next;
-//             if (!tp->head)
-//                 tp->tail = NULL;
-
-//             tp->queue_size--;
-//             tp->active_count++;
-//         }
-
-//         LeaveCriticalSection(&tp->lock);
-
-//         if (task)
-//         {
-//             task->fn(task->arg);
-//             free(task);
-
-//             EnterCriticalSection(&tp->lock);
-//             tp->active_count--;
-
-//             if (tp->queue_size == 0 && tp->active_count == 0)
-//                 WakeAllConditionVariable(&tp->idle_cond);
-
-//             LeaveCriticalSection(&tp->lock);
-//         }
-//     }
-
-//     return 0;
-// }
-
 /* ===================================================== */
 /* Init                                                  */
 /* ===================================================== */
 
-int threadpool_init(threadpool_t **out, int threads, int queue_capacity) {
+// int threadpool_init(threadpool_t **out, int threads, int queue_capacity)
+
+int threadpool_init(threadpool_t **out, size_t threads, size_t queue_capacity)
+
+{
   threadpool_t *tp = malloc(sizeof(threadpool_t));
   if (!tp)
     return -1;
 
-  tp->threads = malloc(sizeof(HANDLE) * threads);
-  if (!tp->threads) {
+  // tp->threads = malloc(sizeof(*tp->threads) * threads);
+  tp->threads = malloc(threads * sizeof(*tp->threads));
+
+  if (!tp->threads)
+  {
     free(tp);
     return -1;
   }
+
+  // if (threads == 0)
+  //   return -1;
+
+  // if (threads > SIZE_MAX / sizeof(*tp->threads))
+  //   return -1;
 
   tp->thread_count = threads;
   tp->queue_capacity = queue_capacity;
@@ -156,7 +135,8 @@ int threadpool_init(threadpool_t **out, int threads, int queue_capacity) {
   InitializeConditionVariable(&tp->cond);
   InitializeConditionVariable(&tp->idle_cond);
 
-  for (int i = 0; i < threads; i++) {
+  for (size_t i = 0; i < threads; i++)
+  {
     tp->threads[i] = CreateThread(NULL, 0, thread_worker, tp, 0, NULL);
 
     if (!tp->threads[i])
@@ -171,7 +151,8 @@ int threadpool_init(threadpool_t **out, int threads, int queue_capacity) {
 /* Submit                                                */
 /* ===================================================== */
 
-void threadpool_submit(threadpool_t *tp, task_fn fn, void *arg) {
+void threadpool_submit(threadpool_t *tp, task_fn fn, void *arg)
+{
   task_node_t *node = malloc(sizeof(task_node_t));
   if (!node)
     return;
@@ -199,7 +180,8 @@ void threadpool_submit(threadpool_t *tp, task_fn fn, void *arg) {
 /* Proper Blocking Wait                                  */
 /* ===================================================== */
 
-void threadpool_wait_all(threadpool_t *tp) {
+void threadpool_wait_all(threadpool_t *tp)
+{
   EnterCriticalSection(&tp->lock);
 
   while (tp->queue_size > 0 || tp->active_count > 0)
@@ -212,7 +194,8 @@ void threadpool_wait_all(threadpool_t *tp) {
 /* Shutdown                                              */
 /* ===================================================== */
 
-void threadpool_shutdown(threadpool_t *tp) {
+void threadpool_shutdown(threadpool_t *tp)
+{
   if (!tp)
     return;
 
@@ -226,7 +209,8 @@ void threadpool_shutdown(threadpool_t *tp) {
   LeaveCriticalSection(&tp->lock);
 
   /* Join threads */
-  for (int i = 0; i < tp->thread_count; i++) {
+  for (size_t i = 0; i < tp->thread_count; i++)
+  {
     WaitForSingleObject(tp->threads[i], INFINITE);
     CloseHandle(tp->threads[i]);
   }
@@ -235,7 +219,8 @@ void threadpool_shutdown(threadpool_t *tp) {
   free(tp->threads);
 
   /* Free remaining queue nodes (should be none) */
-  while (tp->head) {
+  while (tp->head)
+  {
     task_node_t *tmp = tp->head;
     tp->head = tmp->next;
     free(tmp);
@@ -243,29 +228,3 @@ void threadpool_shutdown(threadpool_t *tp) {
 
   free(tp);
 }
-
-// void threadpool_shutdown(threadpool_t *tp)
-// {
-//     EnterCriticalSection(&tp->lock);
-//     tp->stop = 1;
-//     WakeAllConditionVariable(&tp->cond);
-//     LeaveCriticalSection(&tp->lock);
-
-//     for (int i = 0; i < tp->thread_count; i++)
-//     {
-//         WaitForSingleObject(tp->threads[i], INFINITE);
-//         CloseHandle(tp->threads[i]);
-//     }
-
-//     DeleteCriticalSection(&tp->lock);
-//     free(tp->threads);
-
-//     while (tp->head)
-//     {
-//         task_node_t *tmp = tp->head;
-//         tp->head = tmp->next;
-//         free(tmp);
-//     }
-
-//     free(tp);
-// }

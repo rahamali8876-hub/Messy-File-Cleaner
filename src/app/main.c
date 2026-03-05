@@ -12,13 +12,15 @@
 /* Printing                                                  */
 /* ========================================================= */
 
-static void print_usage(void) {
+static void print_usage(void)
+{
   printf("\nCleaner Enterprise\n");
   printf("Usage:\n");
   printf("  cleaner.exe --source <path> [--target <path>] [--dry-run]\n\n");
 }
 
-static void print_help(void) {
+static void print_help(void)
+{
   printf("\nCleaner Enterprise v1.0.0\n");
   printf("----------------------------------------\n");
   printf("Usage:\n");
@@ -39,29 +41,41 @@ static void print_help(void) {
 /* ========================================================= */
 
 static int parse_arguments(int argc, char **argv,
-                           cleaner_config_t *out_config) {
+                           cleaner_config_t *out_config)
+{
   if (!out_config)
     return -1;
 
   memset(out_config, 0, sizeof(*out_config));
 
-  for (int i = 1; i < argc; ++i) {
-    if (strcmp(argv[i], "--source") == 0 && i + 1 < argc) {
+  for (int i = 1; i < argc; ++i)
+  {
+    if (strcmp(argv[i], "--source") == 0 && i + 1 < argc)
+    {
       out_config->source = argv[++i];
-    } else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) {
+    }
+    else if (strcmp(argv[i], "--target") == 0 && i + 1 < argc)
+    {
       out_config->target = argv[++i];
-    } else if (strcmp(argv[i], "--dry-run") == 0) {
+    }
+    else if (strcmp(argv[i], "--dry-run") == 0)
+    {
       out_config->dry_run = 1;
-    } else if (strcmp(argv[i], "--help") == 0) {
+    }
+    else if (strcmp(argv[i], "--help") == 0)
+    {
       print_help();
       exit(0);
-    } else {
+    }
+    else
+    {
       printf("Unknown argument: %s\n", argv[i]);
       return -1;
     }
   }
 
-  if (!out_config->source) {
+  if (!out_config->source)
+  {
     printf("Error: --source is required.\n");
     return -1;
   }
@@ -73,38 +87,58 @@ static int parse_arguments(int argc, char **argv,
 /* Main                                                      */
 /* ========================================================= */
 
-int main(int argc, char **argv) {
-  if (argc < 2) {
+int main(int argc, char **argv)
+{
+  if (argc < 2)
+  {
     print_usage();
     return 1;
   }
 
   cleaner_config_t config;
 
-  if (parse_arguments(argc, argv, &config) != 0) {
+  if (parse_arguments(argc, argv, &config) != 0)
+  {
     print_usage();
     return 1;
   }
 
   /* ---------------- Platform API ---------------- */
+  const cleaner_platform_api_t *platform =
+      cleaner_platform_get_api();
 
-  cleaner_platform_api_t platform;
-
-  if (cleaner_platform_get_api(&platform) != 0) {
+  if (!platform)
+  {
     fprintf(stderr, "Platform initialization failed.\n");
     return 1;
   }
 
-  if (platform.abi_version != CLEANER_PLATFORM_ABI_VERSION) {
+  if (platform->abi_version != CLEANER_PLATFORM_ABI_VERSION)
+  {
     fprintf(stderr, "Platform ABI mismatch.\n");
     return 1;
   }
 
+  // cleaner_platform_api_t platform;
+
+  // if (cleaner_platform_get_api(&platform) != 0) {
+  //   fprintf(stderr, "Platform initialization failed.\n");
+  //   return 1;
+  // }
+
+  // if (platform.abi_version != CLEANER_PLATFORM_ABI_VERSION)
+  // {
+  //   fprintf(stderr, "Platform ABI mismatch.\n");
+  //   return 1;
+  // }
+
   /* ---------------- Run Core ---------------- */
 
-  error_t err = core_run(&platform, &config);
+  // error_t err = core_run(&platform, &config);
+  error_t err = core_run(platform, &config);
 
-  if (!error_is_ok(err)) {
+  if (!error_is_ok(err))
+  {
     fprintf(stderr, "Cleaner failed: %s\n",
             err.message ? err.message : "unknown error");
     return 1;
@@ -112,13 +146,3 @@ int main(int argc, char **argv) {
 
   return 0;
 }
-
-// // // i am  building the same architecture used in:
-
-// // // Backup systems
-
-// // // Antivirus quarantine engines
-
-// // // Media organizers
-
-// // // Digital forensics pipelines

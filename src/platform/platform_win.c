@@ -1,162 +1,354 @@
-// src/platform/platform_win.c
 
+// src/platform/platform_api.c
+
+#define CLEANER_PLATFORM_BUILD
 #include "cleaner/platform/platform_api.h"
 
-#include "cleaner/platform/filesystem/filesystem_win.h"
-#include "cleaner/platform/sync/mutex_win.h"
-#include "cleaner/platform/threadpool/threadpool_win.h"
-#include "cleaner/platform/time/time_win.h"
+#ifdef _WIN32
 
-#include "cleaner/platform/windows/file_win.h"
+#include <windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-/* ===================================================== */
-/* FILE I/O IMPLEMENTATION (if in separate file, just   */
-/* forward declare here instead)                        */
-/* ===================================================== */
+/* ========================================================= */
+/* OPAQUE STRUCTS                                            */
+/* ========================================================= */
 
-cleaner_file_t *win_file_open(const char *, const char *);
+struct cleaner_file_s
+{
+  FILE *handle;
+};
 
-int win_file_write(cleaner_file_t *, const void *, size_t);
+struct cleaner_mutex_s
+{
+  CRITICAL_SECTION cs;
+};
 
-int win_file_flush(cleaner_file_t *);
-void win_file_close(cleaner_file_t *);
+struct cleaner_cond_s
+{
+  CONDITION_VARIABLE cv;
+};
 
-/* ===================================================== */
-/* FILESYSTEM ADAPTER                                   */
-/* ===================================================== */
+struct cleaner_threadpool_s
+{
+  PTP_POOL pool;
+  TP_CALLBACK_ENVIRON env;
+};
 
-static int abi_fs_walk(const char *root, cleaner_fs_callback_t cb, void *user) {
-  return cleaner_fs_walk(root, cb, user);
-}
+/* ========================================================= */
+/* FILE                                                       */
+/* ========================================================= */
 
-static int abi_fs_mkdir(const char *path) {
-  return cleaner_fs_create_directory(path) ? 0 : -1;
-}
-
-static int abi_fs_rename(const char *oldp, const char *newp) {
-  return cleaner_fs_rename(oldp, newp) ? 0 : -1;
-}
-
-static int abi_fs_exists(const char *path) {
-  return cleaner_fs_exists(path) ? 1 : 0;
-}
-
-static int abi_fs_is_dir(const char *path) {
-  return cleaner_fs_is_directory(path) ? 1 : 0;
-}
-
-/* ===================================================== */
-/* MUTEX ADAPTER                                         */
-/* ===================================================== */
-
-static cleaner_mutex_t *abi_mutex_create(void) {
-  return (cleaner_mutex_t *)cleaner_mutex_create();
-}
-
-static void abi_mutex_lock(cleaner_mutex_t *m) {
-  cleaner_mutex_lock((cleaner_mutex *)m);
-}
-
-static void abi_mutex_unlock(cleaner_mutex_t *m) {
-  cleaner_mutex_unlock((cleaner_mutex *)m);
-}
-
-static void abi_mutex_destroy(cleaner_mutex_t *m) {
-  cleaner_mutex_destroy((cleaner_mutex *)m);
-}
-
-/* ===================================================== */
-/* THREADPOOL ADAPTER                                   */
-/* ===================================================== */
-
-/* ===================================================== */
-/* THREADPOOL ADAPTER                                   */
-/* ===================================================== */
-
-static cleaner_threadpool_t *win_threadpool_create(int threads,
-                                                   int queue_size) {
-  threadpool_t *tp = NULL;
-
-  if (threadpool_init(&tp, threads, queue_size) != 0)
+static cleaner_file_t *win_file_open(const char *path, const char *mode)
+{
+  FILE *f = fopen(path, mode);
+  if (!f)
     return NULL;
 
-  return (cleaner_threadpool_t *)tp;
+  cleaner_file_t *file = malloc(sizeof(*file));
+  if (!file)
+  {
+    fclose(f);
+    return NULL;
+  }
+
+  file->handle = f;
+  return file;
 }
 
-static void win_threadpool_submit(cleaner_threadpool_t *tp, void (*fn)(void *),
-                                  void *arg) {
-  threadpool_submit((threadpool_t *)tp, fn, arg);
+static int win_file_write(cleaner_file_t *file, const void *data, size_t size)
+{
+  if (!file || !file->handle)
+    return -1;
+  return fwrite(data, 1, size, file->handle) == size ? 0 : -1;
 }
 
-static void win_threadpool_wait(cleaner_threadpool_t *tp) {
-  threadpool_wait_all((threadpool_t *)tp);
+static int win_file_flush(cleaner_file_t *file)
+{
+  if (!file || !file->handle)
+    return -1;
+  return fflush(file->handle);
 }
 
-static void win_threadpool_destroy(cleaner_threadpool_t *tp) {
-  threadpool_shutdown((threadpool_t *)tp);
+static void win_file_close(cleaner_file_t *file)
+{
+  if (!file)
+    return;
+  if (file->handle)
+    fclose(file->handle);
+  free(file);
 }
 
-/* ===================================================== */
-/* TIME ADAPTER                                          */
-/* ===================================================== */
+/* ========================================================= */
+/* DIRECTORY                                                  */
+/* ========================================================= */
 
-static int abi_time_now(cleaner_time_t *out) {
-  platform_time_t t;
+static int win_fs_mkdir(const char *path)
+{
+  return CreateDirectoryA(path, NULL) ? 0 : -1;
+}
 
-  if (platform_time_now(&t) != 0)
+static int win_fs_rename(const char *src, const char *dst)
+{
+  return MoveFileExA(src, dst, MOVEFILE_REPLACE_EXISTING) ? 0 : -1;
+}
+
+static int win_fs_walk(const char *path,
+                       int (*callback)(const cleaner_fs_entry_t *, void *),
+                       void *user_data)
+{
+  char search[MAX_PATH];
+  snprintf(search, sizeof(search), "%s\\*", path);
+
+  WIN32_FIND_DATAA data;
+  HANDLE h = FindFirstFileA(search, &data);
+  if (h == INVALID_HANDLE_VALUE)
     return -1;
 
-  out->year = t.year;
-  out->month = t.month;
-  out->day = t.day;
-  out->hour = t.hour;
-  out->minute = t.minute;
-  out->second = t.second;
+  do
+  {
+    if (!strcmp(data.cFileName, ".") ||
+        !strcmp(data.cFileName, ".."))
+      continue;
 
+    cleaner_fs_entry_t entry;
+    entry.path = data.cFileName;
+    entry.is_directory =
+        (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+    if (callback(&entry, user_data) != 0)
+      break;
+
+  } while (FindNextFileA(h, &data));
+
+  FindClose(h);
   return 0;
 }
 
-/* ===================================================== */
-/* ABI ENTRYPOINT                                        */
-/* ===================================================== */
+/* ========================================================= */
+/* TIME                                                       */
+/* ========================================================= */
 
-int cleaner_platform_get_api(cleaner_platform_api_t *out) {
-
+static int win_time_now(cleaner_time_t *out)
+{
   if (!out)
     return -1;
 
-  out->abi_version = CLEANER_PLATFORM_ABI_VERSION;
+  SYSTEMTIME st;
+  GetLocalTime(&st);
 
-  if (out->abi_version != CLEANER_PLATFORM_ABI_VERSION)
-    return -2;
-
-  /* Filesystem */
-  out->fs_walk = abi_fs_walk;
-  out->fs_mkdir = abi_fs_mkdir;
-  out->fs_rename = abi_fs_rename;
-  out->fs_exists = abi_fs_exists;
-  out->fs_is_dir = abi_fs_is_dir;
-
-  /* File I/O */
-  out->file_open = win_file_open;
-  out->file_write = win_file_write;
-  out->file_flush = win_file_flush;
-  out->file_close = win_file_close;
-
-  /* Mutex */
-  out->mutex_create = abi_mutex_create;
-  out->mutex_lock = abi_mutex_lock;
-  out->mutex_unlock = abi_mutex_unlock;
-  out->mutex_destroy = abi_mutex_destroy;
-
-  /* Threadpool */
-  out->threadpool_create = win_threadpool_create;
-  out->threadpool_submit = win_threadpool_submit;
-  out->threadpool_wait = win_threadpool_wait; /* <-- ADD */
-  out->threadpool_destroy = win_threadpool_destroy;
-
-  /* Time */
-  out->time_now = abi_time_now;
+  out->year = st.wYear;
+  out->month = st.wMonth;
+  out->day = st.wDay;
+  out->hour = st.wHour;
+  out->minute = st.wMinute;
+  out->second = st.wSecond;
 
   return 0;
 }
+
+/* ========================================================= */
+/* MUTEX                                                      */
+/* ========================================================= */
+
+static cleaner_mutex_t *win_mutex_create(void)
+{
+  cleaner_mutex_t *m = malloc(sizeof(*m));
+  if (!m)
+    return NULL;
+
+  InitializeCriticalSection(&m->cs);
+  return m;
+}
+
+static void win_mutex_lock(cleaner_mutex_t *m)
+{
+  if (m)
+    EnterCriticalSection(&m->cs);
+}
+
+static void win_mutex_unlock(cleaner_mutex_t *m)
+{
+  if (m)
+    LeaveCriticalSection(&m->cs);
+}
+
+static void win_mutex_destroy(cleaner_mutex_t *m)
+{
+  if (!m)
+    return;
+  DeleteCriticalSection(&m->cs);
+  free(m);
+}
+
+/* ========================================================= */
+/* CONDITION VARIABLE                                        */
+/* ========================================================= */
+
+static cleaner_cond_t *win_cond_create(void)
+{
+  cleaner_cond_t *c = malloc(sizeof(*c));
+  if (!c)
+    return NULL;
+  InitializeConditionVariable(&c->cv);
+  return c;
+}
+
+static void win_cond_wait(cleaner_cond_t *c, cleaner_mutex_t *m)
+{
+  SleepConditionVariableCS(&c->cv, &m->cs, INFINITE);
+}
+
+static void win_cond_signal(cleaner_cond_t *c)
+{
+  WakeConditionVariable(&c->cv);
+}
+
+static void win_cond_broadcast(cleaner_cond_t *c)
+{
+  WakeAllConditionVariable(&c->cv);
+}
+
+static void win_cond_destroy(cleaner_cond_t *c)
+{
+  free(c);
+}
+
+/* ========================================================= */
+/* THREADPOOL                                                */
+/* ========================================================= */
+
+/* Proper context struct (NO illegal casts) */
+typedef struct
+{
+  cleaner_thread_fn fn;
+  void *arg;
+} win_tp_ctx_t;
+
+static VOID CALLBACK win_tp_callback(
+    PTP_CALLBACK_INSTANCE instance,
+    PVOID context,
+    PTP_WORK work)
+{
+  (void)instance;
+
+  win_tp_ctx_t *ctx = (win_tp_ctx_t *)context;
+
+  ctx->fn(ctx->arg);
+
+  free(ctx);
+  CloseThreadpoolWork(work);
+}
+
+static cleaner_threadpool_t *
+win_threadpool_create(int threads, int flags)
+{
+  (void)flags;
+
+  if (threads <= 0)
+    return NULL;
+
+  cleaner_threadpool_t *tp = malloc(sizeof(*tp));
+  if (!tp)
+    return NULL;
+
+  tp->pool = CreateThreadpool(NULL);
+  if (!tp->pool)
+  {
+    free(tp);
+    return NULL;
+  }
+
+  SetThreadpoolThreadMaximum(tp->pool, (DWORD)threads);
+  SetThreadpoolThreadMinimum(tp->pool, 1);
+
+  InitializeThreadpoolEnvironment(&tp->env);
+  SetThreadpoolCallbackPool(&tp->env, tp->pool);
+
+  return tp;
+}
+
+static void win_threadpool_submit(cleaner_threadpool_t *tp,
+                                  cleaner_thread_fn fn,
+                                  void *arg)
+{
+  if (!tp || !fn)
+    return;
+
+  win_tp_ctx_t *ctx = malloc(sizeof(*ctx));
+  if (!ctx)
+    return;
+
+  ctx->fn = fn;
+  ctx->arg = arg;
+
+  PTP_WORK work =
+      CreateThreadpoolWork(win_tp_callback, ctx, &tp->env);
+
+  if (!work)
+  {
+    free(ctx);
+    return;
+  }
+
+  SubmitThreadpoolWork(work);
+}
+
+static void win_threadpool_destroy(cleaner_threadpool_t *tp)
+{
+  if (!tp)
+    return;
+
+  CloseThreadpool(tp->pool);
+  free(tp);
+}
+
+/* ========================================================= */
+/* GLOBAL API TABLE (ORDER MUST MATCH HEADER EXACTLY)       */
+/* ========================================================= */
+
+static const cleaner_platform_api_t g_api = {
+
+    /* ABI */
+    CLEANER_PLATFORM_ABI_VERSION,
+
+    /* File */
+    win_file_open,
+    win_file_write,
+    win_file_flush,
+    win_file_close,
+
+    /* Directory */
+    win_fs_mkdir,
+    win_fs_rename,
+    win_fs_walk,
+
+    /* Time */
+    win_time_now,
+
+    /* Mutex */
+    win_mutex_create,
+    win_mutex_lock,
+    win_mutex_unlock,
+    win_mutex_destroy,
+
+    /* Condition */
+    win_cond_create,
+    win_cond_wait,
+    win_cond_signal,
+    win_cond_broadcast,
+    win_cond_destroy,
+
+    /* Threadpool */
+    win_threadpool_create,
+    win_threadpool_submit,
+    win_threadpool_destroy};
+
+CLEANER_PLATFORM_API
+const cleaner_platform_api_t *cleaner_platform_get_api(void)
+{
+  return &g_api;
+}
+
+#endif

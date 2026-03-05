@@ -1,25 +1,47 @@
-// // // cleaner/include/cleaner/system/executor.h
+// cleaner/include/cleaner/system/executor.h
 
 #ifndef CLEANER_SYSTEM_EXECUTOR_H
 #define CLEANER_SYSTEM_EXECUTOR_H
 
-#include "cleaner/core/error.h"
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+#include <stddef.h>
 #include "cleaner/platform/platform_api.h"
+#include "cleaner/core/error.h"
 
-typedef struct executor_interface executor_interface_t;
+  /* Task function signature */
+  typedef void (*executor_task_fn)(void *arg);
 
-struct executor_interface {
-  void *internal;
+  /* Public interface */
+  typedef struct executor_interface
+  {
+    void *internal;
 
-  error_t (*submit)(executor_interface_t *, void (*fn)(void *), void *arg);
-  error_t (*wait_all)(executor_interface_t *);
-};
+    error_t (*submit)(
+        struct executor_interface *exec,
+        executor_task_fn fn,
+        void *arg);
 
-/* Create executor */
-error_t executor_create(const cleaner_platform_api_t *platform, int threads,
-                        executor_interface_t **out_exec);
+    void (*wait_all)(
+        struct executor_interface *exec);
 
-/* Destroy executor */
-void executor_destroy(executor_interface_t *executor);
+  } executor_interface_t;
+
+  /* Create executor */
+  error_t executor_create(
+      const cleaner_platform_api_t *platform,
+      int threads,
+      executor_interface_t **out_exec);
+
+  /* Destroy executor */
+  void executor_destroy(
+      executor_interface_t *exec);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

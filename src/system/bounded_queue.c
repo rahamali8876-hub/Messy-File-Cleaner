@@ -3,16 +3,18 @@
 #include "cleaner/system/bounded_queue.h"
 #include <stdlib.h>
 
-int bq_init(bounded_queue_t *q, const cleaner_platform_api_t *api,
-            int capacity) {
-  if (!q || !api || capacity <= 0)
+int bq_init(bounded_queue_t *q,
+            const cleaner_platform_api_t *api,
+            size_t capacity)
+{
+  if (!q || !api || capacity == 0)
     return -1;
 
-  q->capacity = capacity;
-  q->buffer = malloc(sizeof(void *) * capacity);
+  q->buffer = malloc(capacity * sizeof(*q->buffer));
   if (!q->buffer)
     return -1;
 
+  q->capacity = capacity;
   q->head = 0;
   q->tail = 0;
   q->size = 0;
@@ -22,12 +24,23 @@ int bq_init(bounded_queue_t *q, const cleaner_platform_api_t *api,
   q->not_full = api->cond_create();
 
   if (!q->mutex || !q->not_empty || !q->not_full)
+  {
+    if (q->mutex)
+      api->mutex_destroy(q->mutex);
+    if (q->not_empty)
+      api->cond_destroy(q->not_empty);
+    if (q->not_full)
+      api->cond_destroy(q->not_full);
+    free(q->buffer);
     return -1;
+  }
 
   return 0;
 }
 
-void bq_destroy(bounded_queue_t *q, const cleaner_platform_api_t *api) {
+void bq_destroy(bounded_queue_t *q,
+                const cleaner_platform_api_t *api)
+{
   if (!q || !api)
     return;
 
@@ -38,8 +51,13 @@ void bq_destroy(bounded_queue_t *q, const cleaner_platform_api_t *api) {
   free(q->buffer);
 }
 
-bool bq_push(bounded_queue_t *q, const cleaner_platform_api_t *api,
-             void *item) {
+bool bq_push(bounded_queue_t *q,
+             const cleaner_platform_api_t *api,
+             void *item)
+{
+  if (!q || !api)
+    return false;
+
   api->mutex_lock(q->mutex);
 
   while (q->size == q->capacity)
@@ -55,7 +73,13 @@ bool bq_push(bounded_queue_t *q, const cleaner_platform_api_t *api,
   return true;
 }
 
-bool bq_pop(bounded_queue_t *q, const cleaner_platform_api_t *api, void **out) {
+bool bq_pop(bounded_queue_t *q,
+            const cleaner_platform_api_t *api,
+            void **out)
+{
+  if (!q || !api || !out)
+    return false;
+
   api->mutex_lock(q->mutex);
 
   while (q->size == 0)

@@ -5,13 +5,16 @@
 
 #include "cleaner/platform/platform_api.h"
 #include <stdbool.h>
+#include <stddef.h>
 
-typedef struct {
+typedef struct
+{
   void **buffer;
-  int capacity;
-  int head;
-  int tail;
-  int size;
+
+  size_t capacity;
+  size_t head;
+  size_t tail;
+  size_t size;
 
   cleaner_mutex_t *mutex;
   cleaner_cond_t *not_empty;
@@ -19,14 +22,23 @@ typedef struct {
 
 } bounded_queue_t;
 
-/* Must be called before using queue */
-int bq_init(bounded_queue_t *q, const cleaner_platform_api_t *api,
-            int capacity);
+/* Initialize queue */
+int bq_init(bounded_queue_t *q,
+            const cleaner_platform_api_t *api,
+            size_t capacity);
 
-void bq_destroy(bounded_queue_t *q, const cleaner_platform_api_t *api);
+/* Destroy queue */
+void bq_destroy(bounded_queue_t *q,
+                const cleaner_platform_api_t *api);
 
-bool bq_push(bounded_queue_t *q, const cleaner_platform_api_t *api, void *item);
+/* Blocking push */
+bool bq_push(bounded_queue_t *q,
+             const cleaner_platform_api_t *api,
+             void *item);
 
-bool bq_pop(bounded_queue_t *q, const cleaner_platform_api_t *api, void **out);
+/* Blocking pop */
+bool bq_pop(bounded_queue_t *q,
+            const cleaner_platform_api_t *api,
+            void **out);
 
 #endif

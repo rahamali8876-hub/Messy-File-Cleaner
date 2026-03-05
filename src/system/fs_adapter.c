@@ -1,73 +1,96 @@
 // src/system/fs_adapter.c
-// src/system/fs_adapter.c
 
 #include "cleaner/system/fs_adapter.h"
 #include <stdlib.h>
 #include <string.h>
 
 /* -----------------------------------------------------------
-   GLOBAL ADAPTER CONTEXT
-   (Safe because you only build one interface per process)
+   Bridge context
    ----------------------------------------------------------- */
 
-static fs_adapter_t *g_active_adapter = NULL;
-
-/* -----------------------------------------------------------
-   Bridge context for deep-copy callback
-   ----------------------------------------------------------- */
-
-typedef struct {
+typedef struct
+{
   int (*core_callback)(const fs_entry_t *, void *);
   void *core_ctx;
 } bridge_ctx_t;
 
+/* -----------------------------------------------------------
+   Safe deep-copy bridge
+   ----------------------------------------------------------- */
+
 static int bridge_callback(const cleaner_fs_entry_t *platform_entry,
-                           void *user_data) {
+                           void *user_data)
+{
   bridge_ctx_t *bridge = (bridge_ctx_t *)user_data;
 
-  if (!bridge || !platform_entry)
+  if (!bridge || !platform_entry || !bridge->core_callback)
     return -1;
 
-  /* Deep copy path for safety */
   fs_entry_t core_entry;
-  core_entry.path = strdup(platform_entry->path);
+  memset(&core_entry, 0, sizeof(core_entry));
+
+  if (platform_entry->path)
+  {
+    size_t len = strlen(platform_entry->path);
+    char *copy = (char *)malloc(len + 1);
+    if (!copy)
+      return -1;
+
+    memcpy(copy, platform_entry->path, len + 1);
+    core_entry.path = copy;
+  }
+
   core_entry.is_directory = platform_entry->is_directory;
 
   int result = bridge->core_callback(&core_entry, bridge->core_ctx);
 
   free((void *)core_entry.path);
+
   return result;
 }
 
 /* -----------------------------------------------------------
-   Interface wrappers (MATCH fs_interface_t EXACTLY)
+   Interface implementations
    ----------------------------------------------------------- */
 
-static int interface_list(const char *path,
-                          int (*callback)(const fs_entry_t *, void *),
-                          void *ctx) {
-  if (!g_active_adapter || !g_active_adapter->platform)
+static int list_impl(void *context,
+                     const char *path,
+                     int (*callback)(const fs_entry_t *, void *),
+                     void *ctx)
+{
+  fs_adapter_t *adapter = (fs_adapter_t *)context;
+
+  if (!adapter || !adapter->platform || !adapter->platform->fs_walk)
     return -1;
 
   bridge_ctx_t bridge;
   bridge.core_callback = callback;
   bridge.core_ctx = ctx;
 
-  return g_active_adapter->platform->fs_walk(path, bridge_callback, &bridge);
+  return adapter->platform->fs_walk(path, bridge_callback, &bridge);
 }
 
-static int interface_move(const char *src, const char *dst) {
-  if (!g_active_adapter || !g_active_adapter->platform)
+static int move_impl(void *context,
+                     const char *src,
+                     const char *dst)
+{
+  fs_adapter_t *adapter = (fs_adapter_t *)context;
+
+  if (!adapter || !adapter->platform || !adapter->platform->fs_rename)
     return -1;
 
-  return g_active_adapter->platform->fs_rename(src, dst);
+  return adapter->platform->fs_rename(src, dst);
 }
 
-static int interface_mkdir(const char *path) {
-  if (!g_active_adapter || !g_active_adapter->platform)
+static int mkdir_impl(void *context,
+                      const char *path)
+{
+  fs_adapter_t *adapter = (fs_adapter_t *)context;
+
+  if (!adapter || !adapter->platform || !adapter->platform->fs_mkdir)
     return -1;
 
-  return g_active_adapter->platform->fs_mkdir(path);
+  return adapter->platform->fs_mkdir(path);
 }
 
 /* -----------------------------------------------------------
@@ -75,23 +98,26 @@ static int interface_mkdir(const char *path) {
    ----------------------------------------------------------- */
 
 int fs_adapter_init(fs_adapter_t *adapter,
-                    const cleaner_platform_api_t *platform) {
+                    const cleaner_platform_api_t *platform)
+{
   if (!adapter || !platform)
+    return -1;
+
+  if (platform->abi_version != CLEANER_PLATFORM_ABI_VERSION)
     return -1;
 
   adapter->platform = platform;
   return 0;
 }
 
-void fs_adapter_build_interface(fs_adapter_t *adapter, fs_interface_t *out) {
+void fs_adapter_build_interface(fs_adapter_t *adapter,
+                                fs_interface_t *out)
+{
   if (!adapter || !out)
     return;
 
-  /* Store active adapter */
-  g_active_adapter = adapter;
-
-  /* Assign correctly-typed wrappers */
-  out->list_directory = interface_list;
-  out->move_file = interface_move;
-  out->create_directory = interface_mkdir;
+  out->context = adapter;
+  out->list_directory = list_impl;
+  out->move_file = move_impl;
+  out->create_directory = mkdir_impl;
 }

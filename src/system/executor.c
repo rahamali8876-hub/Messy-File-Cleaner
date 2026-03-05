@@ -1,120 +1,188 @@
 // src/system/executor.c
 
 #include "cleaner/system/executor.h"
-#include <stdatomic.h>
 #include <stdlib.h>
+#include <stdatomic.h>
 
-/* ========================================================= */
-/* Internal Structures                                       */
-/* ========================================================= */
+/* ============================= */
+/* Internal Task Node            */
+/* ============================= */
 
-typedef struct {
-  cleaner_threadpool_t *pool;
-  atomic_int pending;
+typedef struct executor_task
+{
+  executor_task_fn fn;
+  void *arg;
+  struct executor_task *next;
+} executor_task_t;
+
+/* ============================= */
+/* Internal State                */
+/* ============================= */
+
+typedef struct executor_internal
+{
   const cleaner_platform_api_t *platform;
+
+  cleaner_threadpool_t *threadpool;
+
+  atomic_uintptr_t task_head;
+  atomic_int pending;
+  atomic_int shutdown;
+
 } executor_internal_t;
 
-/* Wrapper context for submitted tasks */
-typedef struct {
-  void (*fn)(void *);
-  void *arg;
-  atomic_int *pending_counter;
-} executor_task_wrapper_t;
+/* ============================= */
+/* Worker                        */
+/* ============================= */
 
-/* ========================================================= */
-/* Task Wrapper                                              */
-/* ========================================================= */
+static void executor_worker(void *arg)
+{
+  executor_internal_t *internal =
+      (executor_internal_t *)arg;
 
-static void executor_task_wrapper(void *arg) {
-  executor_task_wrapper_t *ctx = (executor_task_wrapper_t *)arg;
+  for (;;)
+  {
+    if (atomic_load(&internal->shutdown))
+      return;
 
-  /* Execute real task */
-  ctx->fn(ctx->arg);
+    executor_task_t *task =
+        (executor_task_t *)atomic_load(
+            &internal->task_head);
 
-  /* Decrement pending counter */
-  atomic_fetch_sub(ctx->pending_counter, 1);
+    if (!task)
+      return;
 
-  /* Free wrapper */
-  free(ctx);
+    if (!atomic_compare_exchange_weak(
+            &internal->task_head,
+            (uintptr_t *)&task,
+            (uintptr_t)task->next))
+    {
+      continue;
+    }
+
+    task->fn(task->arg);
+    free(task);
+
+    atomic_fetch_sub(&internal->pending, 1);
+  }
 }
 
-/* ========================================================= */
-/* Submit                                                    */
-/* ========================================================= */
+/* ============================= */
+/* Submit                        */
+/* ============================= */
 
-static error_t executor_submit(executor_interface_t *exec, void (*fn)(void *),
-                               void *arg) {
+static error_t executor_submit(
+    executor_interface_t *exec,
+    executor_task_fn fn,
+    void *arg)
+{
   if (!exec || !exec->internal || !fn)
-    return error_make(ERR_INTERNAL, "Executor not initialized");
+    return error_make(ERR_INTERNAL, "Invalid params");
 
-  executor_internal_t *internal = (executor_internal_t *)exec->internal;
+  executor_internal_t *internal =
+      (executor_internal_t *)exec->internal;
 
-  executor_task_wrapper_t *ctx = malloc(sizeof(executor_task_wrapper_t));
+  if (atomic_load(&internal->shutdown))
+    return error_make(ERR_INTERNAL, "Executor shutdown");
 
-  if (!ctx)
-    return error_make(ERR_INTERNAL, "Task allocation failed");
+  executor_task_t *task =
+      malloc(sizeof(*task));
 
-  ctx->fn = fn;
-  ctx->arg = arg;
-  ctx->pending_counter = &internal->pending;
+  if (!task)
+    return error_make(ERR_INTERNAL, "Alloc failed");
 
-  /* Increase pending BEFORE submission */
+  task->fn = fn;
+  task->arg = arg;
+
+  executor_task_t *old_head;
+
+  do
+  {
+    old_head = (executor_task_t *)
+        atomic_load(&internal->task_head);
+
+    task->next = old_head;
+
+  } while (!atomic_compare_exchange_weak(
+      &internal->task_head,
+      (uintptr_t *)&old_head,
+      (uintptr_t)task));
+
   atomic_fetch_add(&internal->pending, 1);
 
-  internal->platform->threadpool_submit(internal->pool, executor_task_wrapper,
-                                        ctx);
+  internal->platform->threadpool_submit(
+      internal->threadpool,
+      executor_worker,
+      internal);
 
   return error_ok();
 }
 
-/* ========================================================= */
-/* Wait All                                                  */
-/* ========================================================= */
+/* ============================= */
+/* Wait All                      */
+/* ============================= */
 
-static error_t executor_wait_all(executor_interface_t *exec) {
+static void executor_wait_all(
+    executor_interface_t *exec)
+{
   if (!exec || !exec->internal)
-    return error_make(ERR_INTERNAL, "Executor not initialized");
+    return;
 
-  executor_internal_t *internal = (executor_internal_t *)exec->internal;
+  executor_internal_t *internal =
+      (executor_internal_t *)exec->internal;
 
-  /* Busy wait (platform has no condvar API) */
-  while (atomic_load(&internal->pending) > 0) {
-    internal->platform->time_now(NULL); /* yield */
+  // while (atomic_load(&internal->pending) > 0)
+  // {
+  //   internal->platform->sleep_ms(1);
+  // }
+
+  // while (atomic_load(&internal->pending) > 0)
+  // {
+  //   /* spin */
+  // }
+  while (atomic_load(&internal->pending) > 0)
+  {
+#if defined(__GNUC__) || defined(__clang__)
+    __asm__ __volatile__("pause");
+#endif
   }
-
-  return error_ok();
 }
 
-/* ========================================================= */
-/* Create                                                    */
-/* ========================================================= */
+/* ============================= */
+/* Create                        */
+/* ============================= */
 
-error_t executor_create(const cleaner_platform_api_t *platform, int threads,
-                        executor_interface_t **out_exec) {
+error_t executor_create(
+    const cleaner_platform_api_t *platform,
+    int threads,
+    executor_interface_t **out_exec)
+{
   if (!platform || threads <= 0 || !out_exec)
-    return error_make(ERR_INTERNAL, "Invalid executor parameters");
+    return error_make(ERR_INTERNAL, "Invalid params");
 
-  executor_internal_t *internal = malloc(sizeof(executor_internal_t));
+  executor_internal_t *internal =
+      calloc(1, sizeof(*internal));
 
   if (!internal)
-    return error_make(ERR_INTERNAL, "Internal allocation failed");
-
-  internal->pool = platform->threadpool_create(threads, 0);
-
-  if (!internal->pool) {
-    free(internal);
-    return error_make(ERR_INTERNAL, "Threadpool creation failed");
-  }
+    return error_make(ERR_INTERNAL, "Alloc failed");
 
   internal->platform = platform;
+
+  atomic_store(&internal->task_head, 0);
   atomic_store(&internal->pending, 0);
+  atomic_store(&internal->shutdown, 0);
 
-  executor_interface_t *iface = malloc(sizeof(executor_interface_t));
+  internal->threadpool =
+      platform->threadpool_create(threads, 0);
 
-  if (!iface) {
-    free(internal);
-    return error_make(ERR_INTERNAL, "Interface allocation failed");
-  }
+  if (!internal->threadpool)
+    return error_make(ERR_INTERNAL, "Threadpool failed");
+
+  executor_interface_t *iface =
+      malloc(sizeof(*iface));
+
+  if (!iface)
+    return error_make(ERR_INTERNAL, "Alloc failed");
 
   iface->internal = internal;
   iface->submit = executor_submit;
@@ -125,21 +193,23 @@ error_t executor_create(const cleaner_platform_api_t *platform, int threads,
   return error_ok();
 }
 
-/* ========================================================= */
-/* Destroy                                                   */
-/* ========================================================= */
+/* ============================= */
+/* Destroy                       */
+/* ============================= */
 
-void executor_destroy(executor_interface_t *exec) {
+void executor_destroy(
+    executor_interface_t *exec)
+{
   if (!exec || !exec->internal)
     return;
 
-  executor_internal_t *internal = (executor_internal_t *)exec->internal;
+  executor_internal_t *internal =
+      (executor_internal_t *)exec->internal;
 
-  /*
-      IMPORTANT:
-      If your platform API provides threadpool_destroy(),
-      call it here before freeing internal.
-  */
+  atomic_store(&internal->shutdown, 1);
+
+  internal->platform->threadpool_destroy(
+      internal->threadpool);
 
   free(internal);
   free(exec);

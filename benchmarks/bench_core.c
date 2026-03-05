@@ -9,7 +9,7 @@
 #include "cleaner/core/organizer.h"
 #include "cleaner/core/renamer.h"
 #include "cleaner/core/scanner.h"
-#include "cleaner/core/task_context.h"
+// #include "cleaner/core/task_context.h"
 
 #include "src/core/core_run.c"
 #include "src/core/processor.c"
@@ -17,7 +17,7 @@
 #include "src/core/organizer.c"
 #include "src/core/renamer.c"
 #include "src/core/scanner.c"
-#include "src/core/task_context.c"
+// #include "src/core/task_context.c"
 
 int main()
 {
