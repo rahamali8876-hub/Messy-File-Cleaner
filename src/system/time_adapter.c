@@ -18,8 +18,7 @@ int time_adapter_init(time_adapter_t *ta,
   return 0;
 }
 
-int time_adapter_now(time_adapter_t *ta,
-                     renamer_timestamp_t *out)
+int time_adapter_now(time_adapter_t *ta, renamer_timestamp_t *out)
 {
   if (!ta || !out || !ta->platform)
     return -1;

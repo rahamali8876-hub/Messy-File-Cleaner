@@ -165,9 +165,27 @@ cleaner/
 │       └── run_all_benchmarks.py
 
 
-windows dialog open and shows cleaner.exe stop working. 
-A probles causesd to strop working curectly. 
-Windows will close the program and notify you if a solution is available 
+cleaner/
+│
+├─ cleaner_core.dll / libcleaner_core.a
+│
+├─ plugins/
+│   ├─ cleaner_fs_windows.dll
+│   ├─ cleaner_fs_linux.so
+│   ├─ cleaner_fs_zip.dll
+│   └─ cleaner_fs_s3.dll
+│
+├─ include/
+│   └─ cleaner/core/fs_interface.h
+│
+├─ src/
+│   └─ plugin_loader.c
+
+
+
+windows dialog open and shows cleaner.exe stop working.
+A probles causesd to strop working curectly.
+Windows will close the program and notify you if a solution is available
 
 Rules:
 
@@ -186,5 +204,3 @@ Rules:
 core/      → business rules
 platform/  → Windows-specific APIs
 infra/     → threadpool, logging, metrics
-
-

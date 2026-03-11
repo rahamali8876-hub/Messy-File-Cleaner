@@ -1,162 +1,121 @@
-// src/system/tx_fs.c
+// // src/system/tx_fs.c
 
 #include "cleaner/system/tx_fs.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-#define TX_RECORD_MAX 1024
+/* ================= INIT ================= */
 
-/* ----------------------------------------------------------
-   WAL record format (text-based for simplicity)
-   ---------------------------------------------------------- */
-
-static int write_record(tx_fs_t *tx, const char *record)
+int tx_fs_init(tx_fs_t *tx, fs_interface_t *fs, cleaner_wal_t *wal)
 {
-    return cleaner_wal_append(tx->wal,
-                              record,
-                              strlen(record),
-                              NULL);
+  if (!tx || !fs || !wal)
+    return -1;
+
+  tx->fs = fs;
+  tx->wal = wal;
+
+  return 0;
 }
 
-/* ----------------------------------------------------------
-   INIT
-   ---------------------------------------------------------- */
+/* ================= MOVE ================= */
 
-int tx_fs_init(tx_fs_t *tx,
-               fs_interface_t *fs,
-               cleaner_wal_t *wal)
+int tx_fs_move(tx_fs_t *tx, const char *src, const char *dst)
 {
-    if (!tx || !fs || !wal)
-        return -1;
+  if (!tx || !src || !dst)
+    return -1;
 
-    tx->fs = fs;
-    tx->wal = wal;
-    return 0;
+  cleaner_wal_log_move(tx->wal, src, dst);
+
+  int r = tx->fs->move_file(tx->fs->context, src, dst);
+
+  if (r != 0)
+    return r;
+
+  cleaner_wal_commit(tx->wal);
+
+  return 0;
 }
 
-/* ----------------------------------------------------------
-   MOVE (Transactional)
-   ---------------------------------------------------------- */
+/* ================= DELETE ================= */
 
-int tx_fs_move(tx_fs_t *tx,
-               const char *src,
-               const char *dst)
+int tx_fs_delete(tx_fs_t *tx, const char *path)
 {
-    if (!tx || !src || !dst)
-        return -1;
+  if (!tx || !path)
+    return -1;
 
-    char record[TX_RECORD_MAX];
+  cleaner_wal_log_delete(tx->wal, path);
 
-    /* 1️⃣ INTENT */
-    snprintf(record, sizeof(record),
-             "MOVE|%s|%s|BEGIN\n", src, dst);
+  int r = tx->fs->remove_file(tx->fs->context, path);
 
-    if (write_record(tx, record) != 0)
-        return -1;
+  if (r != 0)
+    return r;
 
-    /* 2️⃣ EXECUTE */
-    if (tx->fs->move_file(tx->fs->context, src, dst) != 0)
-        return -1;
+  cleaner_wal_commit(tx->wal);
 
-    /* 3️⃣ COMMIT */
-    snprintf(record, sizeof(record),
-             "MOVE|%s|%s|COMMIT\n", src, dst);
-
-    return write_record(tx, record);
+  return 0;
 }
 
-/* ----------------------------------------------------------
-   DELETE (Safe via rename-to-trash)
-   ---------------------------------------------------------- */
+/* ================= MKDIR ================= */
 
-static void build_trash_path(const char *path,
-                             char *out,
-                             size_t size)
+int tx_fs_mkdir(tx_fs_t *tx, const char *path)
 {
-    snprintf(out, size, "%s.trash", path);
+  if (!tx || !path)
+    return -1;
+
+  cleaner_wal_log_mkdir(tx->wal, path);
+
+  int r = tx->fs->create_directory(tx->fs->context, path);
+
+  if (r != 0)
+    return r;
+
+  cleaner_wal_commit(tx->wal);
+
+  return 0;
 }
 
-int tx_fs_delete(tx_fs_t *tx,
-                 const char *path)
+/* ================= INTERFACE WRAPPERS ================= */
+
+static int tx_fs_move_wrapper(void *context, const char *src, const char *dst)
 {
-    if (!tx || !path)
-        return -1;
-
-    char trash[512];
-    build_trash_path(path, trash, sizeof(trash));
-
-    char record[TX_RECORD_MAX];
-
-    snprintf(record, sizeof(record),
-             "DELETE|%s|%s|BEGIN\n", path, trash);
-
-    if (write_record(tx, record) != 0)
-        return -1;
-
-    /* Rename instead of delete */
-    if (tx->fs->move_file(tx->fs->context,
-                          path,
-                          trash) != 0)
-        return -1;
-
-    snprintf(record, sizeof(record),
-             "DELETE|%s|%s|COMMIT\n", path, trash);
-
-    return write_record(tx, record);
+  tx_fs_t *tx = (tx_fs_t *)context;
+  return tx_fs_move(tx, src, dst);
 }
 
-/* ----------------------------------------------------------
-   MKDIR
-   ---------------------------------------------------------- */
-
-int tx_fs_mkdir(tx_fs_t *tx,
-                const char *path)
+static int tx_fs_delete_wrapper(void *context, const char *path)
 {
-    if (!tx || !path)
-        return -1;
-
-    char record[TX_RECORD_MAX];
-
-    snprintf(record, sizeof(record),
-             "MKDIR|%s|BEGIN\n", path);
-
-    if (write_record(tx, record) != 0)
-        return -1;
-
-    if (tx->fs->create_directory(tx->fs->context, path) != 0)
-        return -1;
-
-    snprintf(record, sizeof(record),
-             "MKDIR|%s|COMMIT\n", path);
-
-    return write_record(tx, record);
+  tx_fs_t *tx = (tx_fs_t *)context;
+  return tx_fs_delete(tx, path);
 }
 
-/* ----------------------------------------------------------
-   RECOVERY
-   ---------------------------------------------------------- */
-
-static int recovery_apply(const void *data, size_t size)
+static int tx_fs_mkdir_wrapper(void *context, const char *path)
 {
-    char buffer[TX_RECORD_MAX];
-    if (size >= sizeof(buffer))
-        return -1;
-
-    memcpy(buffer, data, size);
-    buffer[size] = '\0';
-
-    /* Incomplete operations ignored for now */
-    /* Production engine would track BEGIN without COMMIT */
-
-    return 0;
+  tx_fs_t *tx = (tx_fs_t *)context;
+  return tx_fs_mkdir(tx, path);
 }
+
+/* ================= INTERFACE BUILDER ================= */
+
+void tx_fs_build_interface(tx_fs_t *tx, fs_interface_t *out)
+{
+  if (!tx || !out)
+    return;
+
+  out->context = tx;
+
+  out->move_file = tx_fs_move_wrapper;
+
+  out->remove_file = tx_fs_delete_wrapper;
+
+  out->create_directory = tx_fs_mkdir_wrapper;
+
+  out->list_directory = tx->fs->list_directory;
+}
+
+/* ================= RECOVERY ================= */
 
 int tx_fs_recover(tx_fs_t *tx)
 {
-    if (!tx)
-        return -1;
+  if (!tx)
+    return -1;
 
-    return cleaner_wal_recover(tx->wal,
-                               recovery_apply);
+  return cleaner_wal_replay(tx->wal, tx->fs);
 }

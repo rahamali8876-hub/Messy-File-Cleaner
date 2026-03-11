@@ -1,174 +1,86 @@
-// src/wal/wal.c
+// // src/wal/wal.c
 
 #include "cleaner/wal/wal.h"
-#include "cleaner/wal/wal_format.h"
-
-#include <stdio.h>
-#include <stdlib.h>
+#include "cleaner/system/tx_fs.h"
 #include <string.h>
 
-extern uint32_t cleaner_crc32(const void *data, size_t size);
-
-struct cleaner_wal
+int cleaner_wal_open(cleaner_wal_t *wal, const char *path)
 {
-    FILE *fp;
-    uint64_t sequence;
-};
+  wal->file = fopen(path, "a+");
+
+  if (!wal->file)
+    return -1;
+
+  return 0;
+}
+
+void cleaner_wal_close(cleaner_wal_t *wal)
+{
+  if (wal->file)
+    fclose(wal->file);
+}
+
+void cleaner_wal_commit(cleaner_wal_t *wal) { fflush(wal->file); }
+
+/* ================= LOG OPS ================= */
+
+void cleaner_wal_log_move(cleaner_wal_t *wal, const char *src,
+                          const char *dst)
+{
+  fprintf(wal->file, "MOVE %s %s\n", src, dst);
+}
+
+void cleaner_wal_log_delete(cleaner_wal_t *wal, const char *path)
+{
+  fprintf(wal->file, "DELETE %s\n", path);
+}
+
+void cleaner_wal_log_mkdir(cleaner_wal_t *wal, const char *path)
+{
+  fprintf(wal->file, "MKDIR %s\n", path);
+}
 
 FILE *cleaner_wal_file(cleaner_wal_t *wal)
 {
-    if (!wal)
-        return NULL;
-    return wal->fp;
+  if (!wal)
+    return NULL;
+
+  return wal->file;
 }
 
-static int wal_scan_sequence(FILE *fp, uint64_t *seq_out)
+/* ================= RECOVERY ================= */
+
+int cleaner_wal_replay(cleaner_wal_t *wal, fs_interface_t *fs)
 {
-    cleaner_wal_record_header_t header;
-    uint64_t last_seq = 0;
+  rewind(wal->file);
 
-    rewind(fp);
+  char op[32];
+  char a[512];
+  char b[512];
 
-    while (fread(&header, sizeof(header), 1, fp) == 1)
+  while (fscanf(wal->file, "%31s", op) == 1)
+  {
+    if (strcmp(op, "MOVE") == 0)
     {
-
-        if (header.magic != CLEANER_WAL_MAGIC)
-            break;
-
-        if (header.version != CLEANER_WAL_VERSION)
-            break;
-
-        void *payload = malloc(header.payload_size);
-        if (!payload)
-            return -1;
-
-        if (fread(payload, header.payload_size, 1, fp) != 1)
-        {
-            free(payload);
-            break;
-        }
-
-        uint32_t crc = cleaner_crc32(payload, header.payload_size);
-        free(payload);
-
-        if (crc != header.crc32)
-            break;
-
-        last_seq = header.sequence;
+      fscanf(wal->file, "%511s %511s", a, b);
+      // fs->move(a, b);
+      fs->move_file(fs->context, a, b);
     }
 
-    *seq_out = last_seq;
-    return 0;
-}
-
-int cleaner_wal_open(cleaner_wal_t **out, const char *path)
-{
-    cleaner_wal_t *wal = calloc(1, sizeof(*wal));
-    if (!wal)
-        return -1;
-
-    wal->fp = fopen(path, "ab+");
-    if (!wal->fp)
+    else if (strcmp(op, "DELETE") == 0)
     {
-        free(wal);
-        return -1;
+      fscanf(wal->file, "%511s", a);
+      fs->remove_file(fs->context, a);
     }
 
-    if (wal_scan_sequence(wal->fp, &wal->sequence) != 0)
+    else if (strcmp(op, "MKDIR") == 0)
     {
-        fclose(wal->fp);
-        free(wal);
-        return -1;
+      fscanf(wal->file, "%511s", a);
+      // fs->mkdir(a);
+      fs->create_directory(fs->context, a);
+      // fs->mkdir(a);
     }
+  }
 
-    fseek(wal->fp, 0, SEEK_END);
-
-    *out = wal;
-    return 0;
-}
-
-int cleaner_wal_append(cleaner_wal_t *wal,
-                       const void *data,
-                       size_t size,
-                       uint64_t *sequence_out)
-{
-    cleaner_wal_record_header_t header;
-
-    header.magic = CLEANER_WAL_MAGIC;
-    header.version = CLEANER_WAL_VERSION;
-    header.header_size = sizeof(header);
-    header.sequence = ++wal->sequence;
-    header.payload_size = (uint32_t)size;
-    header.crc32 = cleaner_crc32(data, size);
-
-    if (fwrite(&header, sizeof(header), 1, wal->fp) != 1)
-        return -1;
-
-    if (fwrite(data, size, 1, wal->fp) != 1)
-        return -1;
-
-    fflush(wal->fp);
-
-#if defined(_WIN32)
-    _commit(_fileno(wal->fp));
-#else
-    fsync(fileno(wal->fp));
-#endif
-
-    if (sequence_out)
-        *sequence_out = header.sequence;
-
-    return 0;
-}
-
-int cleaner_wal_recover(cleaner_wal_t *wal,
-                        int (*apply_cb)(const void *, size_t))
-{
-    cleaner_wal_record_header_t header;
-
-    rewind(wal->fp);
-
-    while (fread(&header, sizeof(header), 1, wal->fp) == 1)
-    {
-
-        if (header.magic != CLEANER_WAL_MAGIC)
-            break;
-
-        void *payload = malloc(header.payload_size);
-        if (!payload)
-            return -1;
-
-        if (fread(payload, header.payload_size, 1, wal->fp) != 1)
-        {
-            free(payload);
-            break;
-        }
-
-        uint32_t crc = cleaner_crc32(payload, header.payload_size);
-        if (crc != header.crc32)
-        {
-            free(payload);
-            break;
-        }
-
-        if (apply_cb(payload, header.payload_size) != 0)
-        {
-            free(payload);
-            return -1;
-        }
-
-        free(payload);
-    }
-
-    return 0;
-}
-
-int cleaner_wal_close(cleaner_wal_t *wal)
-{
-    if (!wal)
-        return 0;
-
-    fclose(wal->fp);
-    free(wal);
-    return 0;
+  return 0;
 }

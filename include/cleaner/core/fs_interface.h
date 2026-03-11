@@ -8,35 +8,41 @@ extern "C"
 {
 #endif
 
+  /* -------------------------------------------------- */
+  /* Filesystem entry                                   */
+  /* -------------------------------------------------- */
+
+#include <time.h>
+
   typedef struct
   {
     const char *path;
     int is_directory;
+    time_t modification_time; /* File modification time */
   } fs_entry_t;
+
+  /* -------------------------------------------------- */
+  /* Filesystem interface                               */
+  /* -------------------------------------------------- */
 
   typedef struct fs_interface
   {
+    /* platform implementation context */
+    void *context;
 
-    void *context; /* ← principal fix */
+    /* directory scan */
 
-    int (*list_directory)(void *context,
-                          const char *path,
+    int (*list_directory)(void *context, const char *path,
                           int (*callback)(const fs_entry_t *, void *),
-                          void *ctx);
+                          void *callback_ctx);
 
-    int (*move_file)(void *context,
-                     const char *src,
-                     const char *dst);
+    /* file operations */
 
-    int (*create_directory)(void *context,
-                            const char *path);
+    int (*move_file)(void *context, const char *src, const char *dst);
 
-    int (*move)(
-        const char *src,
-        const char *dst);
+    int (*remove_file)(void *context, const char *path);
 
-    int (*remove)(
-        const char *path);
+    int (*create_directory)(void *context, const char *path);
 
   } fs_interface_t;
 

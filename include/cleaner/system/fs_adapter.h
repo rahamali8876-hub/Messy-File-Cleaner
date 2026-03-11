@@ -3,7 +3,6 @@
 #ifndef CLEANER_SYSTEM_FS_ADAPTER_H
 #define CLEANER_SYSTEM_FS_ADAPTER_H
 
-
 #include "cleaner/core/fs_interface.h"
 #include "cleaner/platform/platform_api.h"
 

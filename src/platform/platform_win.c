@@ -6,10 +6,11 @@
 
 #ifdef _WIN32
 
-#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <windows.h>
 
 /* ========================================================= */
 /* OPAQUE STRUCTS                                            */
@@ -106,24 +107,59 @@ static int win_fs_walk(const char *path,
   if (h == INVALID_HANDLE_VALUE)
     return -1;
 
+  int result = 0;
   do
   {
-    if (!strcmp(data.cFileName, ".") ||
-        !strcmp(data.cFileName, ".."))
+    if (!strcmp(data.cFileName, ".") || !strcmp(data.cFileName, ".."))
       continue;
 
+    // Build full path for entry
+    size_t path_len = strlen(path) + 1 + strlen(data.cFileName) + 1;
+    char *full_path = (char *)malloc(path_len);
+    if (!full_path)
+      return -1;
+
+    snprintf(full_path, path_len, "%s\\%s", path, data.cFileName);
+
     cleaner_fs_entry_t entry;
-    entry.path = data.cFileName;
+    entry.path = full_path;
     entry.is_directory =
         (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
+    // Convert Windows FILETIME to Unix time_t
+    FILETIME ft = data.ftLastWriteTime;
+    ULARGE_INTEGER uli;
+    uli.LowPart = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+
+    // Windows FILETIME is in 100-nanosecond intervals since 1601-01-01
+    // Unix time_t is seconds since 1970-01-01
+    // Difference is 116444736000000000 (100-nanosecond intervals)
+    static const unsigned long long FILETIME_UNIX_DIFF = 116444736000000000ULL;
+
+    if (uli.QuadPart >= FILETIME_UNIX_DIFF)
+    {
+      entry.modification_time =
+          (time_t)((uli.QuadPart - FILETIME_UNIX_DIFF) / 10000000);
+    }
+    else
+    {
+      entry.modification_time = 0;
+    }
+
     if (callback(&entry, user_data) != 0)
+    {
+      free(full_path);
+      result = -1;
       break;
+    }
+
+    free(full_path);
 
   } while (FindNextFileA(h, &data));
 
   FindClose(h);
-  return 0;
+  return result;
 }
 
 /* ========================================================= */
@@ -210,10 +246,7 @@ static void win_cond_broadcast(cleaner_cond_t *c)
   WakeAllConditionVariable(&c->cv);
 }
 
-static void win_cond_destroy(cleaner_cond_t *c)
-{
-  free(c);
-}
+static void win_cond_destroy(cleaner_cond_t *c) { free(c); }
 
 /* ========================================================= */
 /* THREADPOOL                                                */
@@ -226,10 +259,8 @@ typedef struct
   void *arg;
 } win_tp_ctx_t;
 
-static VOID CALLBACK win_tp_callback(
-    PTP_CALLBACK_INSTANCE instance,
-    PVOID context,
-    PTP_WORK work)
+static VOID CALLBACK win_tp_callback(PTP_CALLBACK_INSTANCE instance,
+                                     PVOID context, PTP_WORK work)
 {
   (void)instance;
 
@@ -241,8 +272,7 @@ static VOID CALLBACK win_tp_callback(
   CloseThreadpoolWork(work);
 }
 
-static cleaner_threadpool_t *
-win_threadpool_create(int threads, int flags)
+static cleaner_threadpool_t *win_threadpool_create(int threads, int flags)
 {
   (void)flags;
 
@@ -270,8 +300,7 @@ win_threadpool_create(int threads, int flags)
 }
 
 static void win_threadpool_submit(cleaner_threadpool_t *tp,
-                                  cleaner_thread_fn fn,
-                                  void *arg)
+                                  cleaner_thread_fn fn, void *arg)
 {
   if (!tp || !fn)
     return;
@@ -283,8 +312,7 @@ static void win_threadpool_submit(cleaner_threadpool_t *tp,
   ctx->fn = fn;
   ctx->arg = arg;
 
-  PTP_WORK work =
-      CreateThreadpoolWork(win_tp_callback, ctx, &tp->env);
+  PTP_WORK work = CreateThreadpoolWork(win_tp_callback, ctx, &tp->env);
 
   if (!work)
   {
@@ -314,41 +342,25 @@ static const cleaner_platform_api_t g_api = {
     CLEANER_PLATFORM_ABI_VERSION,
 
     /* File */
-    win_file_open,
-    win_file_write,
-    win_file_flush,
-    win_file_close,
+    win_file_open, win_file_write, win_file_flush, win_file_close,
 
     /* Directory */
-    win_fs_mkdir,
-    win_fs_rename,
-    win_fs_walk,
+    win_fs_mkdir, win_fs_rename, win_fs_walk,
 
     /* Time */
     win_time_now,
 
     /* Mutex */
-    win_mutex_create,
-    win_mutex_lock,
-    win_mutex_unlock,
-    win_mutex_destroy,
+    win_mutex_create, win_mutex_lock, win_mutex_unlock, win_mutex_destroy,
 
     /* Condition */
-    win_cond_create,
-    win_cond_wait,
-    win_cond_signal,
-    win_cond_broadcast,
+    win_cond_create, win_cond_wait, win_cond_signal, win_cond_broadcast,
     win_cond_destroy,
 
     /* Threadpool */
-    win_threadpool_create,
-    win_threadpool_submit,
-    win_threadpool_destroy};
+    win_threadpool_create, win_threadpool_submit, win_threadpool_destroy};
 
 CLEANER_PLATFORM_API
-const cleaner_platform_api_t *cleaner_platform_get_api(void)
-{
-  return &g_api;
-}
+const cleaner_platform_api_t *cleaner_platform_get_api(void) { return &g_api; }
 
 #endif

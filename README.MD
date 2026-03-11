@@ -42,17 +42,17 @@ cmake --build build
 
   Cleaner provides 10 enterprise-grade targets for automated code quality:
 
-  Target	Description
-  layer_checks	AST-based architecture enforcement
-  format	Auto-format source via clang-format
-  format_check	Verify formatting compliance
-  static_analysis	Run clang-tidy using compile commands
-  cppcheck	Run static analysis via cppcheck
-  docs	Generate documentation with Doxygen
-  coverage	Produce coverage reports via gcovr
-  graph	Generate CMake dependency graph
-  distclean	Remove build artifacts
-  all_quality	Run all quality gates at once
+  Target Description
+  layer_checks AST-based architecture enforcement
+  format Auto-format source via clang-format
+  format_check Verify formatting compliance
+  static_analysis Run clang-tidy using compile commands
+  cppcheck Run static analysis via cppcheck
+  docs Generate documentation with Doxygen
+  coverage Produce coverage reports via gcovr
+  graph Generate CMake dependency graph
+  distclean Remove build artifacts
+  all_quality Run all quality gates at once
 
   cmake --build build --target all_quality
 
@@ -146,8 +146,11 @@ cmake --build build
 ```
 
 ### Optional Visual Diagram
+
   Shows dependencies: Core & Platform feed System, System feeds Executable.
   ![alt text](mermaid-diagram.png)
 
 
-  
+
+
+ information: Limiting analysis of branches. Use --check-level=exhaustive to analyze all branches. [normalCheckLevelMaxBranches]    

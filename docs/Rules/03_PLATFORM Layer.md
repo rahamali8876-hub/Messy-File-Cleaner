@@ -114,8 +114,8 @@
 
     No reverse dependencies allowed.
 
-
 ### Final Stability Rules
+
     Platform exposes only platform_api.h
 
     No platform header included outside platform/

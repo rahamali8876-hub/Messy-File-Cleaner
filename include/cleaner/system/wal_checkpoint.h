@@ -9,8 +9,7 @@
 typedef struct wal_checkpoint wal_checkpoint_t;
 
 /* Initialize checkpoint engine on a WAL file */
-int wal_checkpoint_init(wal_checkpoint_t **out,
-                        cleaner_wal_t *wal,
+int wal_checkpoint_init(wal_checkpoint_t **out, cleaner_wal_t *wal,
                         const char *checkpoint_path);
 
 /* Perform a checkpoint (flush WAL to permanent snapshot) */

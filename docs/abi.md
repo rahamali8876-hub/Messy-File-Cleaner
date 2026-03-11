@@ -82,21 +82,21 @@ Or use reserved padding
 
 This is your ABI nucleus.
 
-#ifndef CLEANER_PLATFORM_API_H
-#define CLEANER_PLATFORM_API_H
+# ifndef CLEANER_PLATFORM_API_H
+# define CLEANER_PLATFORM_API_H
 
-#include <stdint.h>
+# include <stdint.h>
 
-#ifdef __cplusplus
+# ifdef __cplusplus
 extern "C" {
-#endif
+# endif
 
-#define CLEANER_PLATFORM_ABI_VERSION 1
+# define CLEANER_PLATFORM_ABI_VERSION 1
 
 typedef struct cleaner_platform_api cleaner_platform_api;
 
 typedef struct cleaner_platform_api {
-    /* ===== ABI Identity ===== */
+    /*===== ABI Identity =====*/
 
     uint32_t abi_version;        /* must equal CLEANER_PLATFORM_ABI_VERSION */
     uint32_t struct_size;        /* sizeof(cleaner_platform_api) */
@@ -125,11 +125,11 @@ typedef struct cleaner_platform_api {
 /* Single entrypoint */
 const cleaner_platform_api* cleaner_platform_get_api(void);
 
-#ifdef __cplusplus
+# ifdef __cplusplus
 }
-#endif
+# endif
 
-#endif
+# endif
 
 This is now a real ABI contract.
 
@@ -165,8 +165,8 @@ Never reorder.
 Never reuse until needed.
 
 🖥 Step 4 — Implement platform_win.c Correctly
-#include "cleaner/platform/platform_api.h"
-#include <windows.h>
+# include "cleaner/platform/platform_api.h"
+# include <windows.h>
 
 static int win_fs_mkdir(const char* path)
 {
@@ -178,7 +178,7 @@ static int win_fs_remove(const char* path)
     return DeleteFileA(path) ? 0 : -1;
 }
 
-static int win_fs_rename(const char* oldp, const char* newp)
+static int win_fs_rename(const char*oldp, const char* newp)
 {
     return MoveFileA(oldp, newp) ? 0 : -1;
 }
@@ -188,7 +188,7 @@ static uint64_t win_time_now_ms(void)
     return GetTickCount64();
 }
 
-/* Static immutable ABI table */
+/*Static immutable ABI table*/
 static const cleaner_platform_api g_api = {
     .abi_version = CLEANER_PLATFORM_ABI_VERSION,
     .struct_size = sizeof(cleaner_platform_api),
@@ -257,7 +257,7 @@ int (*fs_copy)(const char* src, const char* dst);
 
 Increase:
 
-#define CLEANER_PLATFORM_ABI_VERSION 2
+# define CLEANER_PLATFORM_ABI_VERSION 2
 
 Old system code:
 

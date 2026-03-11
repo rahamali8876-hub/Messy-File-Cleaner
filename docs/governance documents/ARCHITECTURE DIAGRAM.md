@@ -103,7 +103,6 @@ This document defines the official architectural model of the Cleaner project.
 
     Architecture stability is more important than speed of development.
 
-
 🧠 Now Let Me Elevate This One Level
 
 Here is your correct dependency graph:

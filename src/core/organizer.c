@@ -8,7 +8,8 @@
 static void to_lowercase(const char *src, char *dest, size_t size) {
   size_t i;
 
-  for (i = 0; src[i] && i < size - 1; i++)
+  // for (i = 0; src[i] && i < size - 1; i++)
+  for (i = 0; i < size - 1 && src[i]; i++)
     dest[i] = (char)tolower((unsigned char)src[i]);
 
   dest[i] = '\0';

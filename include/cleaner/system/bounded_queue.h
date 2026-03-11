@@ -7,8 +7,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-typedef struct
-{
+typedef struct {
   void **buffer;
 
   size_t capacity;
@@ -23,22 +22,16 @@ typedef struct
 } bounded_queue_t;
 
 /* Initialize queue */
-int bq_init(bounded_queue_t *q,
-            const cleaner_platform_api_t *api,
+int bq_init(bounded_queue_t *q, const cleaner_platform_api_t *api,
             size_t capacity);
 
 /* Destroy queue */
-void bq_destroy(bounded_queue_t *q,
-                const cleaner_platform_api_t *api);
+void bq_destroy(bounded_queue_t *q, const cleaner_platform_api_t *api);
 
 /* Blocking push */
-bool bq_push(bounded_queue_t *q,
-             const cleaner_platform_api_t *api,
-             void *item);
+bool bq_push(bounded_queue_t *q, const cleaner_platform_api_t *api, void *item);
 
 /* Blocking pop */
-bool bq_pop(bounded_queue_t *q,
-            const cleaner_platform_api_t *api,
-            void **out);
+bool bq_pop(bounded_queue_t *q, const cleaner_platform_api_t *api, void **out);
 
 #endif

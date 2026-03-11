@@ -3,8 +3,7 @@
 #include "cleaner/system/bounded_queue.h"
 #include <stdlib.h>
 
-int bq_init(bounded_queue_t *q,
-            const cleaner_platform_api_t *api,
+int bq_init(bounded_queue_t *q, const cleaner_platform_api_t *api,
             size_t capacity)
 {
   if (!q || !api || capacity == 0)
@@ -38,8 +37,7 @@ int bq_init(bounded_queue_t *q,
   return 0;
 }
 
-void bq_destroy(bounded_queue_t *q,
-                const cleaner_platform_api_t *api)
+void bq_destroy(bounded_queue_t *q, const cleaner_platform_api_t *api)
 {
   if (!q || !api)
     return;
@@ -51,8 +49,7 @@ void bq_destroy(bounded_queue_t *q,
   free(q->buffer);
 }
 
-bool bq_push(bounded_queue_t *q,
-             const cleaner_platform_api_t *api,
+bool bq_push(bounded_queue_t *q, const cleaner_platform_api_t *api,
              void *item)
 {
   if (!q || !api)
@@ -73,9 +70,7 @@ bool bq_push(bounded_queue_t *q,
   return true;
 }
 
-bool bq_pop(bounded_queue_t *q,
-            const cleaner_platform_api_t *api,
-            void **out)
+bool bq_pop(bounded_queue_t *q, const cleaner_platform_api_t *api, void **out)
 {
   if (!q || !api || !out)
     return false;

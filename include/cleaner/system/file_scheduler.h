@@ -1,21 +1,33 @@
 // include/cleaner/system/file_scheduler.h
 
-#ifndef CLEANER_SYSTEM_FILE_SCHEDULER_H
-#define CLEANER_SYSTEM_FILE_SCHEDULER_H
+#ifndef CLEANER_FILE_SCHEDULER_H
+#define CLEANER_FILE_SCHEDULER_H
 
-#include "cleaner/core/error.h"
-#include "cleaner/core/processor.h"
-#include "cleaner/system/executor.h"
 #include <stdatomic.h>
+#include <stdint.h>
+
+#include "cleaner/core/fs_interface.h"
+#include "cleaner/core/processor.h"
+#include "cleaner/system/ws_scheduler.h"
 
 typedef struct {
   processor_t *processor;
-  executor_interface_t *executor;
+  ws_scheduler_t *executor;
+
   atomic_uint_fast64_t counter;
+  atomic_uint_fast64_t pending_tasks;
+
 } file_scheduler_t;
 
-/* Run scheduler on target directory */
+int file_scheduler_create(file_scheduler_t **out, processor_t *processor,
+                          ws_scheduler_t *executor);
 
-error_t file_scheduler_run(file_scheduler_t *sched, const char *target_dir);
+int file_scheduler_schedule(const fs_entry_t *entry, void *ctx);
+
+int file_scheduler_run(file_scheduler_t *sched, const char *root_path);
+
+void file_scheduler_wait(file_scheduler_t *sched);
+
+void file_scheduler_destroy(file_scheduler_t *sched);
 
 #endif

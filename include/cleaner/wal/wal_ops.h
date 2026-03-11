@@ -12,26 +12,23 @@
 
 #pragma pack(push, 1)
 
-typedef struct
-{
-    uint32_t op;
-    uint64_t tx_id;
+typedef struct {
+  uint32_t op;
+  uint64_t tx_id;
 } wal_op_begin_t;
 
-typedef struct
-{
-    uint32_t op;
-    uint64_t tx_id;
+typedef struct {
+  uint32_t op;
+  uint64_t tx_id;
 
-    char src[260];
-    char dst[260];
+  char src[260];
+  char dst[260];
 
 } wal_op_move_t;
 
-typedef struct
-{
-    uint32_t op;
-    uint64_t tx_id;
+typedef struct {
+  uint32_t op;
+  uint64_t tx_id;
 } wal_op_commit_t;
 
 #pragma pack(pop)

@@ -8,8 +8,7 @@
    Bridge context
    ----------------------------------------------------------- */
 
-typedef struct
-{
+typedef struct {
   int (*core_callback)(const fs_entry_t *, void *);
   void *core_ctx;
 } bridge_ctx_t;
@@ -19,8 +18,7 @@ typedef struct
    ----------------------------------------------------------- */
 
 static int bridge_callback(const cleaner_fs_entry_t *platform_entry,
-                           void *user_data)
-{
+                           void *user_data) {
   bridge_ctx_t *bridge = (bridge_ctx_t *)user_data;
 
   if (!bridge || !platform_entry || !bridge->core_callback)
@@ -29,8 +27,7 @@ static int bridge_callback(const cleaner_fs_entry_t *platform_entry,
   fs_entry_t core_entry;
   memset(&core_entry, 0, sizeof(core_entry));
 
-  if (platform_entry->path)
-  {
+  if (platform_entry->path) {
     size_t len = strlen(platform_entry->path);
     char *copy = (char *)malloc(len + 1);
     if (!copy)
@@ -41,6 +38,7 @@ static int bridge_callback(const cleaner_fs_entry_t *platform_entry,
   }
 
   core_entry.is_directory = platform_entry->is_directory;
+  core_entry.modification_time = platform_entry->modification_time;
 
   int result = bridge->core_callback(&core_entry, bridge->core_ctx);
 
@@ -53,11 +51,8 @@ static int bridge_callback(const cleaner_fs_entry_t *platform_entry,
    Interface implementations
    ----------------------------------------------------------- */
 
-static int list_impl(void *context,
-                     const char *path,
-                     int (*callback)(const fs_entry_t *, void *),
-                     void *ctx)
-{
+static int list_impl(void *context, const char *path,
+                     int (*callback)(const fs_entry_t *, void *), void *ctx) {
   fs_adapter_t *adapter = (fs_adapter_t *)context;
 
   if (!adapter || !adapter->platform || !adapter->platform->fs_walk)
@@ -70,10 +65,7 @@ static int list_impl(void *context,
   return adapter->platform->fs_walk(path, bridge_callback, &bridge);
 }
 
-static int move_impl(void *context,
-                     const char *src,
-                     const char *dst)
-{
+static int move_impl(void *context, const char *src, const char *dst) {
   fs_adapter_t *adapter = (fs_adapter_t *)context;
 
   if (!adapter || !adapter->platform || !adapter->platform->fs_rename)
@@ -82,9 +74,7 @@ static int move_impl(void *context,
   return adapter->platform->fs_rename(src, dst);
 }
 
-static int mkdir_impl(void *context,
-                      const char *path)
-{
+static int mkdir_impl(void *context, const char *path) {
   fs_adapter_t *adapter = (fs_adapter_t *)context;
 
   if (!adapter || !adapter->platform || !adapter->platform->fs_mkdir)
@@ -98,8 +88,7 @@ static int mkdir_impl(void *context,
    ----------------------------------------------------------- */
 
 int fs_adapter_init(fs_adapter_t *adapter,
-                    const cleaner_platform_api_t *platform)
-{
+                    const cleaner_platform_api_t *platform) {
   if (!adapter || !platform)
     return -1;
 
@@ -110,9 +99,7 @@ int fs_adapter_init(fs_adapter_t *adapter,
   return 0;
 }
 
-void fs_adapter_build_interface(fs_adapter_t *adapter,
-                                fs_interface_t *out)
-{
+void fs_adapter_build_interface(fs_adapter_t *adapter, fs_interface_t *out) {
   if (!adapter || !out)
     return;
 

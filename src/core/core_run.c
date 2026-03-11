@@ -1,47 +1,73 @@
 // src/core/core_run.c
+// Main orchestration pipeline
+
 #include "cleaner/core/core_run.h"
 #include "cleaner/core/error.h"
 #include "cleaner/core/processor.h"
-#include "cleaner/system/executor.h"
+
 #include "cleaner/system/file_scheduler.h"
 #include "cleaner/system/fs_adapter.h"
+#include "cleaner/system/tx_fs.h"
 
+#include "cleaner/wal/wal.h"
+
+#include <stdatomic.h>
+#include <stdio.h>
+
+/**
+ * Main pipeline orchestration
+ */
 error_t core_run(const cleaner_platform_api_t *platform,
-                 const cleaner_config_t *config) {
+                 const cleaner_config_t *config)
+{
   if (!platform || !config)
     return error_make(ERR_INTERNAL, "Invalid core_run parameters");
 
+  if (!config->source)
+    return error_make(ERR_INTERNAL, "Source path required");
+
+  /* ========== FS Adapter ========== */
   fs_adapter_t adapter;
-
   if (fs_adapter_init(&adapter, platform) != 0)
-
     return error_make(ERR_INTERNAL, "FS adapter init failed");
 
   fs_interface_t fs_iface;
   fs_adapter_build_interface(&adapter, &fs_iface);
 
+  /* ========== WAL ========== */
+  cleaner_wal_t wal;
+  if (cleaner_wal_open(&wal, "cleaner.wal") != 0)
+    return error_make(ERR_INTERNAL, "WAL open failed");
+
+  /* ========== TX FS ========== */
+  tx_fs_t tx;
+  if (tx_fs_init(&tx, &fs_iface, &wal) != 0)
+    return error_make(ERR_INTERNAL, "TX FS init failed");
+
+  if (tx_fs_recover(&tx) != 0)
+    return error_make(ERR_INTERNAL, "TX FS recovery failed");
+
+  fs_interface_t tx_iface;
+  tx_fs_build_interface(&tx, &tx_iface);
+
+  /* ========== Processor ========== */
   processor_t processor;
-  processor_init(&processor, &fs_iface, NULL, config->dry_run);
+  if (processor_init(&processor, &tx_iface, NULL, config->dry_run) != 0)
+    return error_make(ERR_INTERNAL, "Processor init failed");
 
-  executor_interface_t *executor = NULL;
-  // error_t err = executor_create(platform, 4, &executor);
-  error_t err = executor_create(platform, 1, &executor);
-  if (!error_is_ok(err))
-    return err;
+  /* ========== File Scheduler ========== */
+  file_scheduler_t scheduler = {.processor = &processor,
+                                .executor = NULL,
+                                .counter = 0,
+                                .pending_tasks = 0};
 
-  file_scheduler_t scheduler = {
-      .processor = &processor, .executor = executor, .counter = 0};
+  if (file_scheduler_run(&scheduler, config->source) != 0)
+  {
+    return error_make(ERR_WORK_FAILED, "File scheduler failed");
+  }
 
-  // int sched_result = file_scheduler_run(&scheduler, config->source);
-  error_t sched_err = file_scheduler_run(&scheduler, config->source);
-
-  executor_destroy(executor);
-
-  if (!error_is_ok(sched_err))
-    return sched_err;
-
-  // if (sched_result != 0)
-  //     return error_make(ERR_WORK_FAILED, "Scheduler failed");
+  printf("[SUCCESS] Pipeline complete. Processed %llu files\n",
+         (unsigned long long)atomic_load(&scheduler.counter));
 
   return error_ok();
 }
